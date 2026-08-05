@@ -1,3 +1,5 @@
+import sys
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -8,6 +10,8 @@ import crnn_algorithm
 
 
 def main():
+    save_path = sys.argv[1]
+    #save_path = "models/foo.pt"
 
     # activates Metal Performance Shaders (gpu) in apple m-proccessor
     # device = torch.device("mps" if torch.backends.mps.is_available() else "cpu") # enable GPU acceleration (GPU computing)
@@ -38,6 +42,7 @@ def main():
 
 
     best_acc = 0.0
+    best_epoch = 0
     start = time.perf_counter()
     for epoch in range(30):
         loss = crnn_algorithm.train_epoch(model, train_loader, criterion, optimizer, device)
@@ -52,10 +57,11 @@ def main():
 
             if p > best_acc: # when accuracy based on test dataset beats previous, model get downloaded
                 best_acc = p
-                torch.save(model.state_dict(), "models/foo.pt")
-                print(f"  saved, (accuracy on validation dataset: {p:.3f})")
+                torch.save(model.state_dict(), f"{save_path}_{epoch}.pt")
+                best_epoch = epoch
+                print(f" saved {save_path}_{epoch}.pt, (accuracy on validation dataset: {p:.3f})")
 
-    model.load_state_dict(torch.load("models/foo.pt", map_location=device))
+    model.load_state_dict(torch.load(f"{save_path}_{best_epoch}.pt", map_location=device))
     total, correct = crnn_algorithm.test_model_debug(model, test_loader, device)
     print(f"correct plates: {total}, correct symbols: {correct}")
 

@@ -1,3 +1,5 @@
+import sys
+
 import torch
 from torch.utils.data import DataLoader
 import time
@@ -6,6 +8,8 @@ import parcing
 import yolov1_algorithm
 
 def main():
+    save_path = sys.argv[1]
+    #save_path = "models/yolov1/first"
     device = torch.device("mps")
     print("using", device)
 
@@ -30,9 +34,9 @@ def main():
         print(f"epoch: {epoch} train loss: {train_loss:.3f} val loss: {val_loss:.3f} time: {elapsed:.3f} \n"
               f"accuracy (bad metric here): {accuracy:.3f} precision: {precision:.3f} recall: {recall:.3f}, F1: {F1:.3f}")
 
-        torch.save(model.state_dict(), f"models/yolov1/first_{epoch}.pt")
+        torch.save(model.state_dict(), f"{save_path}_{epoch}.pt")
         print(f"model saved, epoch: {epoch}")
-        with open("models/yolov1_info.txt", "a") as file:
+        with open(f"{save_path}_info.txt", "a") as file:
             file.write(f"epoch: {epoch}\n"
                        f"train loss: {train_loss:.3f}, val loss: {val_loss:.3f}, time: {elapsed:.3f} \n"
                        f"accuracy: {accuracy:.3f}, precision: {precision:.3f}, recall: {recall:.3f}, F1: {F1:.3f}\n")

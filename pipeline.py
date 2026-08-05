@@ -1,7 +1,8 @@
 import torch
-from loguru import logger
 from ultralytics import YOLO
 import cv2
+import sys
+import os
 
 import crnn_algorithm
 
@@ -65,8 +66,6 @@ def draw_plates_recognition(image_path, out_path="results/test.png"):
         cv2.putText(img, text, (x1, text_coordinates), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
     img = cv2.imwrite(out_path, img)
-    if not img:
-        logger.error(f"failed to write {out_path}kkk")
     return img
 
 
@@ -97,14 +96,33 @@ def video_pipeline(video_in_path, video_out_path="results/test.mp4"):
     cap.release()  # closes input video
     writer.release()  # closes made video
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
+VIDEO_EXTS = {".mov", ".mp4", ".avi", ".mkv", ".m4v", ".webm"}
+
+def procces(in_path):
+    extension = os.path.splitext(in_path)[1].lower() # splits extension
+    base = os.path.splitext(in_path)[0] # splits path
+
+    if extension in IMAGE_EXTS:
+        out_path = base + "_out.png"
+        draw_plates_recognition(in_path, out_path)
+    elif extension in VIDEO_EXTS:
+        out_path = base + "_out.mp4"
+        video_pipeline(in_path, out_path)
+    else:
+        print("Unsupported file type")
+
+    print(f"Done path: {out_path}")
 
 def main():
-    image_path ="test_input_files/corona_image.jpg"
-    out_path = "test_output_files/corona_image.png"
-    draw_plates_recognition(image_path, out_path)
+    in_path = sys.argv[1]
+    procces(in_path)
+    # image_path ="test_input_files/corona_image.jpg"
+    # out_path = "test_output_files/corona_image.png"
+    # draw_plates_recognition(image_path, out_path)
 
     # video_in_path = "test_input_files/corona.mov"
-    # video_out_path = "test_output_files/corona.mp4"
+    # video_out_path = "test_output_files/corona_2.mp4"
     # video_pipeline(video_in_path, video_out_path)
 
 
