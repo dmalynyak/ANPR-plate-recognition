@@ -4,13 +4,13 @@ import cv2
 import sys
 import os
 
-import crnn_algorithm
+from src.models import crnn_algorithm
 
 # global varibles, so functions see them. (They are not downloaded every time function calls them)
-yolo_detector = YOLO("models/yolo_third/weights/best.pt")  # pretrained od_yolo on COCO dataset
+yolo_detector = YOLO("weights/yolo/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset
 recognizer = crnn_algorithm.CRNN()  # CRNN class (has forvard method in it)
-recognizer.load_state_dict(torch.load("models/1_0_nomeroff_expansion_30.pt", map_location="cpu"))
-recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models forward pass
+recognizer.load_state_dict(torch.load("weights/ocr/crnn_best.pt", map_location="cpu"))
+recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models_test forward pass
 
 
 def read_plate_path(image_path):

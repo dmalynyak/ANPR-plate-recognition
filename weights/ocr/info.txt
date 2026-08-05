@@ -1,0 +1,4 @@
+1_0_nomeroff:
+    dataset_expansion = True
+    epoch 10: train 0.0198  val 0.0447  plate 0.975  char 0.995, time: 2643.26
+    saved (accuracy (on validation dataset): 0.975)

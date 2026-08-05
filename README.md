@@ -36,15 +36,37 @@ flowchart LR
 
 ## Installation
 
+**Requirements:** Python 3.10+, and a CUDA-capable GPU is recommended for training.
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/dmalynyak/ANPR-plate-recognition
+cd ANPR
+
+# 2. Create a virtual environment
+python -m venv venv
+source venv/bin/activate # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+```
+
+### Model weights
+Two weights are included:  
+ - **OCR:** weights/ocr/crnn_best.pt
+ - **YOLO8n fine-tuned:** weights/yolo/yolo8n_fine_tuned.pt
+
+
 ## Usage
-1. Training:
- ```bash
-  python crnn_train.py save_path    # OCR training
-  python yolov1_train.py save_path  # YOLOv1 training
-  ```
-2. Inference:  
-Procceses image or video. Gives final output as shown in demo. 
- ```bash
+1. **Training:**
+```bash
+  python src/models/crnn_train.py save_path    # OCR training
+  python src/models/yolov1_train.py save_path  # YOLOv1 training
+```
+2. **Inference:**  
+Procceses image or video. Gives final output as shown in demo.  
+file.ext can be eather image or video.
+```bash
     python pipeline.py path/file.ext #saves file path/file_out.ext 
 ```
 
