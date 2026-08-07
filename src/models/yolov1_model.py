@@ -1,3 +1,5 @@
+import time
+
 import torch
 from torch import nn
 
@@ -148,7 +150,7 @@ class FC(nn.Module):
     def forward(self, x):
         x = torch.flatten(x, 1)
         x = self.fc_1(x)
-        x = self.act(self.fc_1(x))
+        x = self.act(x) # activation
         x = self.drop(x)
         x = self.fc_2(x)
         x = x.view(-1, 7, 7, 30)
@@ -237,8 +239,9 @@ def criterion(predictions, targets):
 def train_epoch(model, loader, criterion, optimizer, device):
     model.train()
     epoch_loss = 0.0
+    start = time.perf_counter()
 
-    for images, targets in loader:
+    for i, (images, targets) in enumerate(loader):
         images = images.to(device)
         targets = targets.to(device)
         predictions = model(images) #  (B, 7, 7, 30)
@@ -248,6 +251,12 @@ def train_epoch(model, loader, criterion, optimizer, device):
         loss.backward()
         optimizer.step()
         epoch_loss += loss.item()
+
+        if i % 20 == 0:
+            torch.save(model.state_dict(), "models_test/yolov1_foo/latest.pt")
+            end = time.perf_counter()
+            print(f"saved latest: batch {i}/{len(loader)}  loss {loss.item():.3f} time: {end - start:.3f} \n")
+            start = time.perf_counter()
 
     return epoch_loss / len(loader)
 

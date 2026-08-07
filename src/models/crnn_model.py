@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import time
 
+from src.parsing import load_cache_nomeroff, PlateDataset
+
 '''
 B - batch
 C/D - channel/depth (the same)
@@ -21,7 +23,7 @@ CTCLoss        scalar
 '''
 
 '''
-criterin - CTC loss
+criterion - CTC loss
 
 '''
 
@@ -51,8 +53,7 @@ class CRNN(nn.Module):
         )
 
         # BiLST - rnn + bidirectional LSTM
-        self.rnn = nn.LSTM(512, 256, num_layers=2, bidirectional=True,
-                           batch_first=True)  # (B, 32, 512) -> 2x(B, 32, 512) -> (B, 32, 512)
+        self.rnn = nn.LSTM(512, 256, num_layers=2, bidirectional=True, batch_first=True)  # (B, 32, 512) -> 2x(B, 32, 512) -> (B, 32, 512)
 
         # fc - fully connected (Linear Softmax but without Softmax!)
         self.fc = nn.Linear(512, 37)  # (B, 32, 512) -> (B, 32, 37)
@@ -137,18 +138,18 @@ def decode_batch(model, loader):
     return preds
 
 
-# predict one image
-def predict_image(model, path, device, w=128, h=32):
-    img, true_name = parcing.img_parcing(path, w, h)  # (32,128)
-    t = torch.tensor(img, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
-    # (32,128) -> (1,32,128) -> (1,1,32,128) = (B,C,H,W) with B=1
-
-    model.eval()
-    with torch.no_grad():
-        pred = decode_image(model(t.to(device)))[0]  # first (and only) item in the batch
-
-    print(f"{path}  pred: {pred!r}  true: {true_name!r}")
-    return pred
+# # predict one image
+# def predict_image(model, path, device, w=128, h=32):
+#     img, true_name = parsing.img_parcing(path, w, h)  # (32,128)
+#     t = torch.tensor(img, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
+#     # (32,128) -> (1,32,128) -> (1,1,32,128) = (B,C,H,W) with B=1
+#
+#     model.eval()
+#     with torch.no_grad():
+#         pred = decode_image(model(t.to(device)))[0]  # first (and only) item in the batch
+#
+#     print(f"{path}  pred: {pred!r}  true: {true_name!r}")
+#     return pred
 
 
 # ---------- testing and validation -------------------
@@ -227,17 +228,17 @@ def main():
     # X_val, Y_val = parcing.load_dataset_kaggle("dataset/ocr_kaggle/val", width = 128, heigh = 32)
     # X_test, Y_test = parcing.load_dataset_kaggle("dataset/ocr_kaggle/test", width = 128, heigh = 32)
 
-    X_train, Y_train = parcing.load_cache_nomeroff("dataset/ocr_nomeroff/train/img", "dataset/ocr_nomeroff/train/ann",
+    X_train, Y_train = load_cache_nomeroff("dataset/ocr_nomeroff/train/img", "dataset/ocr_nomeroff/train/ann",
                                                    width=128, heigh=32, cache_name="cache/train")
-    X_val, Y_val = parcing.load_cache_nomeroff("dataset/ocr_nomeroff/val/img", "dataset/ocr_nomeroff/val/ann",
+    X_val, Y_val = load_cache_nomeroff("dataset/ocr_nomeroff/val/img", "dataset/ocr_nomeroff/val/ann",
                                                width=128, heigh=32, cache_name="cache/val")
-    X_test, Y_test = parcing.load_cache_nomeroff("dataset/ocr_nomeroff/test/img", "dataset/ocr_nomeroff/test/ann",
+    X_test, Y_test = load_cache_nomeroff("dataset/ocr_nomeroff/test/img", "dataset/ocr_nomeroff/test/ann",
                                                  width=128, heigh=32, cache_name="cache/test")
 
-    train_loader = DataLoader(parcing.PlateDataset(X_train, Y_train, expansion=True), batch_size=32,
+    train_loader = DataLoader(PlateDataset(X_train, Y_train, expansion=True), batch_size=32,
                               shuffle=True)  # loads bathes into train_epoch
-    val_loader = DataLoader(parcing.PlateDataset(X_val, Y_val, expansion=False), batch_size=32, shuffle=False)
-    test_loader = DataLoader(parcing.PlateDataset(X_test, Y_test, expansion=False), batch_size=32, shuffle=False)
+    val_loader = DataLoader(PlateDataset(X_val, Y_val, expansion=False), batch_size=32, shuffle=False)
+    test_loader = DataLoader(PlateDataset(X_test, Y_test, expansion=False), batch_size=32, shuffle=False)
 
     model = CRNN().to(device)  # copies all weights and biases into GPU memmory
     criterion = nn.CTCLoss(blank=0,

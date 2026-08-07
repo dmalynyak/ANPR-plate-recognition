@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-from src.models import yolov1_algorithm
+from src.models import yolov1_model
+from src.parsing import YoloDataset
 
 
 def main():
@@ -9,7 +10,7 @@ def main():
     model.load_state_dict(torch.load("../../models_test/yolov1/first_19.pt", map_location=device))
     model.eval()
 
-    dataset_test = parcing.YoloDataset("dataset/od_nomeroff/images/test",
+    dataset_test = YoloDataset("dataset/od_nomeroff/images/test",
                                        "dataset/od_nomeroff/labels/test")
     test_loader = DataLoader(dataset_test, batch_size=8, shuffle=False, num_workers=4)
 

@@ -4,7 +4,7 @@ import cv2
 import sys
 import os
 
-from src.models import crnn_algorithm
+from src.models import crnn_model
 
 # global varibles, so functions see them. (They are not downloaded every time function calls them)
 yolo_detector = YOLO("weights/yolo/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset

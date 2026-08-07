@@ -1,5 +1,7 @@
 from ultralytics import YOLO
 
+from src.parsing import via_to_yolo
+
 
 def main(
         epochs: int = 10,
@@ -9,11 +11,11 @@ def main(
         project: str = 'models_test',
         name: str = 'yolo_01'
 ):
-    parcing.via_to_yolo("dataset/od_nomeroff/ann/train/via_region_data.json", "dataset/od_nomeroff/images/train",
+    via_to_yolo("dataset/od_nomeroff/ann/train/via_region_data.json", "dataset/od_nomeroff/images/train",
                         "dataset/od_nomeroff/labels/train")
-    parcing.via_to_yolo("dataset/od_nomeroff/ann/val/via_region_data.json", "dataset/od_nomeroff/images/val",
+    via_to_yolo("dataset/od_nomeroff/ann/val/via_region_data.json", "dataset/od_nomeroff/images/val",
                         "dataset/od_nomeroff/labels/val")
-    parcing.via_to_yolo("dataset/od_nomeroff/ann/test/via_region_data.json", "dataset/od_nomeroff/images/test",
+    via_to_yolo("dataset/od_nomeroff/ann/test/via_region_data.json", "dataset/od_nomeroff/images/test",
                         "dataset/od_nomeroff/labels/test")
 
     model = YOLO('yolov8n.pt')  # pretrained model on COCO

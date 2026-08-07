@@ -35,8 +35,7 @@ flowchart LR
 ## Results
 
 ## Installation
-
-**Requirements:** Python 3.10+, and a CUDA-capable GPU is recommended for training.
+**Project uses MPS (Metal Performance Shaders) for Mac. If you use NVIDIA then change all 'device=mps' to 'device=cuda'**
 
 ```bash
 # 1. Clone the repo
@@ -58,6 +57,7 @@ Two weights are included:
 
 
 ## Usage
+(doesnt work yet)
 1. **Training:**
 ```bash
   python src/models/crnn_train.py save_path    # OCR training

@@ -3,9 +3,8 @@
 .DS_Store
 __pycache__/
 *.pyc
-excess/test.py
+excess/
 cache/
 data/
 debug/
-excess/
 models_test/

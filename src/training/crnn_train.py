@@ -5,7 +5,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import time
 
-from src.models import crnn_algorithm
+from src.train_architecture import crnn_train_architecture
+from src.models import crnn_model
+from src.parsing import load_dataset_kaggle, PlateDataset
 
 
 def main():
@@ -17,9 +19,9 @@ def main():
     device = torch.device("cpu")
     print("using", device)
 
-    X_train, Y_train = parcing.load_dataset_kaggle("dataset/ocr_kaggle/train", width = 128, heigh = 32)
-    X_val, Y_val = parcing.load_dataset_kaggle("dataset/ocr_kaggle/val", width = 128, heigh = 32)
-    X_test, Y_test = parcing.load_dataset_kaggle("dataset/ocr_kaggle/test", width = 128, heigh = 32)
+    X_train, Y_train = load_dataset_kaggle("dataset/ocr_kaggle/train", width = 128, heigh = 32)
+    X_val, Y_val = load_dataset_kaggle("dataset/ocr_kaggle/val", width = 128, heigh = 32)
+    X_test, Y_test = load_dataset_kaggle("dataset/ocr_kaggle/test", width = 128, heigh = 32)
 
     # X_train, Y_train = parcing.load_cache_nomeroff("dataset/ocr_nomeroff/train/img", "dataset/ocr_nomeroff/train/ann", width = 128, heigh = 32, cache_name = "cache/train")
     # X_val, Y_val = parcing.load_cache_nomeroff("dataset/ocr_nomeroff/val/img", "dataset/ocr_nomeroff/val/ann", width = 128, heigh = 32, cache_name = "cache/val")
@@ -27,9 +29,9 @@ def main():
 
 
 
-    train_loader = DataLoader(parcing.PlateDataset(X_train, Y_train, expansion=True),  batch_size=32, shuffle=True) # loads bathes into train_epoch
-    val_loader = DataLoader(parcing.PlateDataset(X_val, Y_val, expansion=False),  batch_size=32, shuffle=False)
-    test_loader = DataLoader(parcing.PlateDataset(X_test, Y_test, expansion=False), batch_size=32, shuffle=False)
+    train_loader = DataLoader(PlateDataset(X_train, Y_train, expansion=True),  batch_size=32, shuffle=True) # loads bathes into train_epoch
+    val_loader = DataLoader(PlateDataset(X_val, Y_val, expansion=False),  batch_size=32, shuffle=False)
+    test_loader = DataLoader(PlateDataset(X_test, Y_test, expansion=False), batch_size=32, shuffle=False)
 
 
 
@@ -44,13 +46,13 @@ def main():
     best_epoch = 0
     start = time.perf_counter()
     for epoch in range(30):
-        loss = crnn_algorithm.train_epoch(model, train_loader, criterion, optimizer, device)
+        loss = crnn_train_architecture.train_epoch(model, train_loader, criterion, optimizer, device)
 
         if epoch % 5 == 0:
             end = time.perf_counter()
             elapsed = end - start
-            val_loss = crnn_algorithm.validation(model, val_loader, criterion, device)
-            p, c = crnn_algorithm.test_model(model, val_loader, device)
+            val_loss = crnn_train_architecture.validation(model, val_loader, criterion, device)
+            p, c = crnn_train_architecture.test_model(model, val_loader, device)
             print(f"epoch {epoch}: train loss: {loss:.4f}  val loss: {val_loss:.4f}  plate acc:{p:.3f}  char acc:{c:.3f}, time: {elapsed:.2f}")
             start = time.perf_counter()
 
@@ -61,7 +63,7 @@ def main():
                 print(f" saved {save_path}_{epoch}.pt, (accuracy on validation dataset: {p:.3f})")
 
     model.load_state_dict(torch.load(f"{save_path}_{best_epoch}.pt", map_location=device))
-    total, correct = crnn_algorithm.test_model_debug(model, test_loader, device)
+    total, correct = crnn_train_architecture.test_model_debug(model, test_loader, device)
     print(f"correct plates: {total}, correct symbols: {correct}")
 
 
