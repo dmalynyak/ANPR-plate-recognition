@@ -14,9 +14,10 @@ class ConvBlock(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 # backbone for both classification (pre-training) and detection
 class Darknet19(nn.Module):
-    def __init__(self, img_size):
+    def __init__(self):
         super().__init__()
 
         # comment are structure for classification (pre-training) backbone ImageNet 224x224
@@ -59,7 +60,8 @@ class Darknet19(nn.Module):
     def forward(self, x):
         passthrow = self.part1(x)
         out = self.part2(passthrow)
-        return passthrow, out
+        return out, passthrow
+
 
 # input: (B, 1024, 7, 7)
 class ClassificationHead(nn.Module):
@@ -75,6 +77,7 @@ class ClassificationHead(nn.Module):
     def forward(self, x):
         return self.head(x)
 
+
 # input: (B, 1024, 13, 13)
 class DetectionHead(nn.Module):
     def __init__(self):
@@ -82,7 +85,7 @@ class DetectionHead(nn.Module):
 
         self.conv1 = ConvBlock(in_channels=1024, out_channels=1024, kernel_size=3, stride=1, padding=1)
         self.conv2 = ConvBlock(in_channels=1024, out_channels=1024, kernel_size=3, stride=1, padding=1)
-        self.rearrange = nn.PixelShuffle(2)
+        self.rearrange = nn.PixelUnshuffle(2) # (512, 26, 26) -> (2048, 13, 13)
         self.conv3 = ConvBlock(in_channels=1024 + 2048, out_channels=1024, kernel_size=3, stride=1, padding=1)
         self.conv4 = nn.Conv2d(in_channels=1024, out_channels=125, kernel_size=1, stride=1, padding=0)
 
@@ -95,3 +98,27 @@ class DetectionHead(nn.Module):
         x = self.conv4(x)
         return x
 
+
+class YOLOv2Pretraining(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.backbone = Darknet19()
+        self.head = ClassificationHead()
+
+    def forward(self, x):
+        x, _ = self.backbone(x)
+        x = self.head(x)
+        return x
+
+class YOLOv2(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.backbone = Darknet19()
+        self.head = DetectionHead()
+
+    def forward(self, x):
+        x, passthrow = self.backbone(x)
+        x = self.head(x, passthrow)
+        return x

@@ -27,7 +27,7 @@ def get_boxes_from_label(label_path):
 def encode_target(boxes, anchors):
 
     gt = torch.zeros(13, 13, 5, 25)
-    n = boxes.shape[0]
+    # n = boxes.shape[0]
     for class_id, x, y, w, h in boxes:
 
         class_id = int(class_id)
