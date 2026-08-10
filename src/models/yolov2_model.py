@@ -95,7 +95,9 @@ class DetectionHead(nn.Module):
         passthrow = self.rearrange(passthrow_raw)    #(B, 512, 26, 26) -> (B, 2048, 13, 13)
         x = torch.cat([x, passthrow], dim=1)    #(B, 1024+2048, 13, 13)
         x = self.conv3(x)
-        x = self.conv4(x)
+        x = self.conv4(x) # (B, 125, 13, 13)
+        x = x.permute(0, 2, 3, 1)  # (B, 13, 13, 125)
+        x = x.reshape(x.shape[0], 13, 13, 5, 25)  # (B, 13, 13, 5, 25)
         return x
 
 

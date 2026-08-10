@@ -8,7 +8,8 @@ from src.train_architecture.yolov2_train_architecture import get_iou_centered
 def garbage_names_clean(all_names, labels_dir_path):
     good_names = []
     for name in all_names:
-        if os.path.exists(os.path.join(labels_dir_path, os.path.splitext(name)[0] + '.txt')):
+        name_path = os.path.join(labels_dir_path, os.path.splitext(name)[0] + '.txt')
+        if os.path.exists(name_path) and os.path.getsize(name_path) > 0:
             good_names.append(name)
 
     print(f"kept {len(good_names)} / {len(all_names)} images with good labels")
@@ -18,6 +19,8 @@ def get_boxes_from_label(label_path):
     boxes = []
     with open(label_path, 'r') as f:
         for line in f:
+            if not line.split():
+                continue
             cls, x, y, w, h = map(float, line.split()) # what map is for ?
             boxes.append([cls, x, y, w, h])
     boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 5)
@@ -56,9 +59,8 @@ def encode_target(boxes, anchors):
     return gt
 
 class YOLOv2Dataset(torch.utils.data.Dataset):
-    def __init__(self, img_dir_path, labels_dir_path, anchors, cls_num):
+    def __init__(self, img_dir_path, labels_dir_path, anchors):
         self.anchors = anchors
-        self.cls_num = cls_num
         self.labels_dir_path = labels_dir_path
         self.img_dir_path = img_dir_path
 
