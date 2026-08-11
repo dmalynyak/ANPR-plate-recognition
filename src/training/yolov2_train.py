@@ -8,28 +8,40 @@ from src.data_loaders import yolov2_dataload
 
 def train_logic(model, optimizer, scheduler, anchors, detection_criterion, epoch_start, epoch_end, save_path, device):
 
-    dataset_train = yolov2_dataload.YOLOv2Dataset("data/dataset/od_nomeroff/images/train","data/dataset/od_nomeroff/labels/train", anchors)
-    dataset_val = yolov2_dataload.YOLOv2Dataset("data/dataset/od_nomeroff/images/val","data/dataset/od_nomeroff/labels/val", anchors)
-    dataset_test = yolov2_dataload.YOLOv2Dataset("data/dataset/od_nomeroff/images/test","data/dataset/od_nomeroff/labels/test", anchors)
+    img_train_path = "data/dataset/od_nomeroff/images/train"
+    labels_train_path = "data/dataset/od_nomeroff/labels/train"
+    img_val_path = "data/dataset/od_nomeroff/images/val"
+    labels_val_path = "data/dataset/od_nomeroff/labels/val"
+    img_test_path = "data/dataset/od_nomeroff/images/train"
+    labels_test_path = "data/dataset/od_nomeroff/labels/train"
+    dataset_train = yolov2_dataload.YOLOv2Dataset(img_train_path, labels_train_path, anchors)
+    dataset_val = yolov2_dataload.YOLOv2Dataset  (img_val_path,   labels_val_path,   anchors)
+    dataset_test = yolov2_dataload.YOLOv2Dataset (img_test_path,  labels_test_path,  anchors)
 
     train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=4,persistent_workers=True, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=4, shuffle=False, num_workers=4, persistent_workers=True, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=4, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
 
     best_val_loss = float("inf")
+    best_map = 0.0
     for epoch in range(epoch_start, epoch_end):
 
         start = time.perf_counter()
         train_loss = yolov2_train_architecture.train_epoch(model, train_loader, detection_criterion, optimizer,
                                                            scheduler, save_path, device, epoch)
-        val_loss = yolov2_train_architecture.validation(model, val_loader, detection_criterion, device)
+        val_loss = yolov2_train_architecture.val_loss(model, val_loader, detection_criterion, device)
         # yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, save_path=save_path, name='latest')
         end = time.perf_counter()
         elapsed = end - start
         print(f"epoch: {epoch} train loss: {train_loss:.3f}, val loss: {val_loss}, time: {elapsed}")
 
         if val_loss < best_val_loss:
-            yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name='best')
+            yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_loss_epoch{epoch}")
+
+        metrics = yolov2_train_architecture.val_map(model,anchors, img_val_path, labels_val_path)
+        if metrics["mAP_5095"] > best_map:
+            best_map = metrics["mAP_5095"]
+            yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_mAP_epoch{epoch}")
 
         yolov2_train_architecture.save_model_weights(model, epoch, save_path=save_path, name='weights')
 
@@ -73,7 +85,7 @@ def train_resume(load_path, save_path):
 
 
 def main():
-    train_from_zero("models_test/yolov2_second")
+    train_from_zero("models_test/yolov2_third")
     # train_resume("models_test/yolov2_first/best.pt", "models_test/yolov2_first")
 
 if __name__ == "__main__":

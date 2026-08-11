@@ -1,8 +1,10 @@
+import os
 import time, torch
 from pathlib import Path
 from torch import nn
 from torch.optim.lr_scheduler import LinearLR
 from tqdm import tqdm
+from src.data_loaders.yolov2_dataload import garbage_names_clean, load_one_image
 
 
 '''
@@ -65,7 +67,7 @@ def get_anchors(labels_path):
     anchors = 13 * torch.rand(5, 2)
 
     anch_iter = 0
-    for passes in range(10):
+    for passes in range(100):
         flag = False
         anch_change = 0
         anch_iter += 1
@@ -96,29 +98,6 @@ def get_anchors(labels_path):
                 anchors[idx, j] = 13 * anchors_new[idx, j] / anchors_new[idx, 2] # makes cell-units for anchor/13 to work properly
 
     return anchors
-
-
-# gives final inference answer (before postprocessing)
-# pred: (13, 13, 5, 25) decoded: (13, 13, 5, 25)
-def decode_prediction(pred, anchors, device):
-    with torch.no_grad():
-
-        dec = torch.clone(pred) # makes independant copy
-        S = 13
-
-        cx = torch.arange(S).view(1, S, 1).to(device)  # (1, 13, 1) broadcasts to (13, 13, 5) where (13, i, 5) = i
-        cy = torch.arange(S).view(S, 1, 1).to(device)  # (13, 1, 1)
-        pw = anchors[:, 0].view(1, 1, 5)  # broadcasts to (13, 13, 5)
-        ph = anchors[:, 1].view(1, 1, 5)
-
-        dec[..., 0] = torch.sigmoid(pred[..., 0]) + cx  # bx = σ(tx) + col index
-        dec[..., 1] = torch.sigmoid(pred[..., 1]) + cy
-        dec[..., 2] = pw * torch.exp(pred[..., 2]) # bw
-        dec[..., 3] = ph * torch.exp(pred[..., 3]) # bh
-        dec[..., 4] = torch.sigmoid(pred[..., 4]) # confidence
-        dec[..., 5:25] = torch.softmax(pred[..., 5:25], dim = -1)
-
-        return dec
 
 
 class YOLOv2Loss(nn.Module):
@@ -221,7 +200,7 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
         epoch_loss += loss.item()
         pbar.set_postfix(loss=f"{loss.item():.3f}")
 
-        if i % 20 == 0:
+        if i % 500 == 0:
             torch.save(model.state_dict(), f"{save_path}/latest.pt")
             end = time.perf_counter()
             print(f"saved latest: batch {i}/{len(loader)}  loss {loss.item():.3f} time: {end - start:.3f} \n")
@@ -229,14 +208,14 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
 
     return epoch_loss / len(loader)
 
-def validation(model, loader, criterion, device):
+def val_loss(model, loader, criterion, device):
     model.eval()
     total = 0.0
     with torch.no_grad():
         for images, targets in loader:
             images = images.to(device)
             targets = targets.to(device)
-            with torch.autocast(device_type="cuda", dtype=torch.float16):
+            with torch.autocast(device_type=device.type, dtype=torch.float16):
                 predictions = model(images)
                 loss = criterion(predictions, targets)
 
@@ -270,3 +249,254 @@ def load_model_state(model, optimizer, scheduler, load_path, device):
 def save_model_weights(model, epoch, save_path, name):
     torch.save(model.state_dict(), f"{save_path}/{name}_epoch_{epoch}.pt")
     print(f"saved {save_path}/{name}/epoch_{epoch}.pt weights")
+
+# gives final inference answer (before postprocessing)
+# pred: (13, 13, 5, 25) decoded: (13, 13, 5, 25)
+def decode_prediction(pred, anchors, device):
+    with torch.no_grad():
+
+        dec = torch.clone(pred) # makes independant copy
+        S = 13
+
+        cx = torch.arange(S).view(1, S, 1).to(device)  # (1, 13, 1) broadcasts to (13, 13, 5) where (13, i, 5) = i
+        cy = torch.arange(S).view(S, 1, 1).to(device)  # (13, 1, 1)
+        pw = anchors[:, 0].view(1, 1, 5)  # broadcasts to (13, 13, 5)
+        ph = anchors[:, 1].view(1, 1, 5)
+
+        dec[..., 0] = torch.sigmoid(pred[..., 0]) + cx  # bx = σ(tx) + col index
+        dec[..., 1] = torch.sigmoid(pred[..., 1]) + cy
+        dec[..., 2] = pw * torch.exp(pred[..., 2]) # bw
+        dec[..., 3] = ph * torch.exp(pred[..., 3]) # bh
+        dec[..., 4] = torch.sigmoid(pred[..., 4]) # confidence
+        dec[..., 5:25] = torch.softmax(pred[..., 5:25], dim = -1)
+
+        return dec
+
+def iou_thrd_mask(box, boxes): # (4,) and (N, 4) returns (N,)
+    x1 = torch.max(box[0], boxes[:, 0])  # (M,)
+    y1 = torch.max(box[1], boxes[:, 1])  # (M,)
+    x2 = torch.min(box[2], boxes[:, 2])  # (M,)
+    y2 = torch.min(box[3], boxes[:, 3])  # (M,)
+
+    inter = (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0)  # (M,)
+
+    area_box = (box[2] - box[0]) * (box[3] - box[1])  # scalar
+    area_boxes = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])  # (M,)
+
+    union = area_box + area_boxes - inter
+    return inter / (union + 1e-9)
+
+def nms(detections, iou_boxes_threshold=0.5):
+
+
+    keep_det = []
+    for cls in detections[:, 5].unique(): # loop (0-20) existing object classes
+
+        cls_det = detections[detections[:, 5] == cls] # choode one class detections
+        order = cls_det[:, 4].argsort(descending=True) # finds descending order of scores in those detections
+        cls_det = cls_det[order] # rearanges class detection in right order
+
+
+        while cls_det.shape[0] > 0:
+            keep_det.append(cls_det[0, :])
+
+            if cls_det.shape[0] == 1:
+                break
+            iou = iou_thrd_mask(cls_det[0, :4], cls_det[1:, :4])
+            save_mask = iou < iou_boxes_threshold
+            cls_det = cls_det[1:, :][save_mask, :]
+
+    if len(keep_det) == 0:
+        return detections.new_zeros((0, 6))
+    return torch.stack(keep_det, dim=0)
+
+
+def get_detected_boxes(pred, anchors, conf_threshold = 0.001, iou_boxes_threshold = 0.5):
+
+    device = "cpu"
+    dec = decode_prediction(pred, anchors, device)
+
+    obj = dec[..., 4] # (13, 13, 5)
+    cls_probs = dec[..., 5:25] # (13, 13, 5, 20)
+    cls_score, cls_id = cls_probs.max(dim=-1) # both (13, 13, 5)
+    score = obj * cls_score # (13, 13, 5)
+
+    x1 = dec[..., 0] - dec[..., 2] / 2
+    y1 = dec[..., 1] - dec[..., 3] / 2
+    x2 = dec[..., 0] + dec[..., 2] / 2
+    y2 =dec[..., 1] + dec[..., 3] / 2
+
+    dets = torch.stack([    # 6 tensors (13, 13, 5) get flattened to (845,)
+        x1.reshape(-1),     # 6 tensors (845, ) get stacked to (845, 6)
+        y1.reshape(-1),             # [x1[0], y1[0], x2[0], y2[0], score[0], class_id[0]]
+        x2.reshape(-1),             # [x1[1], y1[1], x2[1], y2[1], score[1], class_id[1]]
+        y2.reshape(-1),             # ...
+        score.reshape(-1),          # [x1[844], y1[844], x2[844], y2[844], score[844], class_id[844]]
+        cls_id.reshape(-1).float()],
+        dim = -1)
+
+    conf_mask = (score > conf_threshold).reshape(-1)
+    detections = dets[conf_mask]
+    detected_boxes = nms(detections, iou_boxes_threshold)
+
+    return detected_boxes # (N, 6)
+
+def get_target_boxes(label_path):
+
+    device = "cpu"
+    boxes = []
+    with open(label_path, "r") as f:
+        for line in f:
+            if not line.split():
+                continue
+            cls, cx, cy, w, h = map(float, line.split())
+
+            cx, cy, w, h = cx * 13, cy * 13, w * 13, h * 13
+
+            x1 = cx - w / 2
+            y1 = cy - h / 2
+            x2 = cx + w / 2
+            y2 = cy + h / 2
+            boxes.append([x1, y1, x2, y2, cls])
+
+    if len(boxes) == 0:
+        return torch.zeros((0, 5))
+    boxes_tensor = torch.tensor(boxes, dtype=torch.float32, device=device)
+    return boxes_tensor # (M, 5)
+
+def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device, conf_threshold = 0.001, iou_boxes_threshold = 0.5):
+    all_names = sorted(os.listdir(img_dir_path))
+    good_names = garbage_names_clean(all_names, label_dir_path)
+
+    detected_boxes = [] # (Total, N, 7) [img_id, x1[0], y1[0], x2[0], y2[0], score[0], class_id[0]]
+    target_boxes = []   # (Total, M, 5) [img_id, x1, y1, x2, y2]
+    for img_id, name in enumerate(good_names):
+        img_path = os.path.join(img_dir_path, name)
+        label_path = os.path.join(label_dir_path, os.path.splitext(name)[0] + '.txt')
+        img = load_one_image(img_path, 416, device)
+
+        with torch.no_grad():
+            pred = model(img)[0]  # (13, 13, 5, 25)
+            one_detected_boxes = get_detected_boxes(pred, anchors, conf_threshold, iou_boxes_threshold) # (N, 6)
+            idx = torch.full((one_detected_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
+            one_detected_boxes = torch.cat([idx, one_detected_boxes], dim=1)
+            detected_boxes.append(one_detected_boxes)
+
+            one_target_boxes = get_target_boxes(label_path) # (M, 5)
+            idx = torch.full((one_target_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
+            one_target_boxes = torch.cat([idx, one_target_boxes], dim=1)
+            target_boxes.append(one_target_boxes)
+
+    return detected_boxes, target_boxes
+
+def match_detections(detected_boxes, target_boxes, class_id, iou_threshold):
+
+    dets = torch.cat(detected_boxes, dim=0)   # (Img_num * N, 7)
+    gts = torch.cat(target_boxes,  dim=0)    # (Img_num * M, 6)
+
+    dets_c = dets[dets[:, 6] == class_id]     # TP+FP detections one class in all images (K, 7)
+    gts_c = gts[gts[:, 5] == class_id]       # GT one class in all images (T, 6)
+    num_gt = gts_c.shape[0]                   # TP+FN total number of TRUE objects of one class
+
+    # sort detection with score rating
+    order = dets_c[:, 5].argsort(descending=True)
+    dets_c = dets_c[order]
+
+    # --- state we carry through the loop ---
+    matched = torch.zeros(num_gt, dtype=torch.bool)   # how many GT boxes are claimed (TP)
+    TP = torch.zeros(dets_c.shape[0])                 # TP detections
+    FP = torch.zeros(dets_c.shape[0])                 # FP detections
+
+
+    for i in range(dets_c.shape[0]):
+        det = dets_c[i] # one row (one detected box)
+        img_id = det[0]
+
+        gt_mask = gts_c[:, 0] == img_id # mask of real box in image det
+        gt_idx  = gt_mask.nonzero(as_tuple=True)[0]   # rows in gts_c / matched
+        gt_img  = gts_c[gt_mask]
+
+        if gt_img.shape[0] == 0: # no GT here -> false positive
+            FP[i] = 1
+            continue
+
+        # IoU of this detection against each GT box in the image (vectorized)
+        ious = iou_thrd_mask(det[1:5], gt_img[:, 1:5])
+        best_iou, best = ious.max(dim=0)              # best-overlapping GT + its index
+
+        # TP only if overlap clears the threshold AND that GT isn't already taken
+        if best_iou.item() >= iou_threshold and not matched[gt_idx[best]].item():
+            TP[i] = 1
+            matched[gt_idx[best]] = True              # claim that GT so nothing else can
+        else:
+            FP[i] = 1                                 # too loose, or a duplicate
+
+    return TP, FP, num_gt # TP/FP detection mask of detected boxes and num_gt number of total GT boxes (for one class in all images at once)
+
+def every_point_interpolation(recall, precision):
+    # puts start/end boundaries for integral
+    mrec = torch.cat([torch.tensor([0.0]), recall,    torch.tensor([1.0])])
+    mpre = torch.cat([torch.tensor([0.0]), precision, torch.tensor([0.0])])
+
+    # for every recall we want max precision value where conf_thrs is no bigger then thrs for recall
+    for i in range(mpre.shape[0] - 1, 0, -1):
+        mpre[i - 1] = torch.max(mpre[i - 1], mpre[i])
+
+    # tuple where each nonzero value is tenzor(i, j) index.
+    # So it returns indexes where recall[i] != recall[i+1]
+    idx = (mrec[1:] != mrec[:-1]).nonzero(as_tuple=True)[0] + 1
+    ap  = torch.sum((mrec[idx] - mrec[idx - 1]) * mpre[idx])
+    return ap.item() # final integral of RP-curve (taken in few points, not continuous)
+
+def average_precision(detected_boxes, target_boxes, class_id, iou_threshold):
+    # chains the three steps you built: match -> precision/recall -> area
+    TP, FP, num_gt = match_detections(detected_boxes, target_boxes, class_id, iou_threshold)
+
+    if num_gt == 0:  # no object of this class in GT in all images
+        return None
+    if TP.numel() == 0: # objects of this class exist but model did not detect any -> AP = 0
+        return 0.0
+
+    cum_TP = torch.cumsum(TP, dim=0)  # cumulative sum of TPs. cum_TP[i] = sum of TP for j<i+1
+    cum_FP = torch.cumsum(FP, dim=0)  # cumulative sum of FPs. cum_FP[i] = sum of FP for j<i+1
+    # TP, FP are in descending order of scores, so going start->end throw this list
+    # gives us vectors of recalls and precisions tooken with different score thresholds
+    # and here conf_score of each box(we iterate from 1->0) acts threshold value
+    # confidence threshold 1 -> 0
+    recall = cum_TP / (num_gt + 1e-9)  # TP / (TP + FN) how many GT objects model found : 0 -> 1 monotonic
+    precision = cum_TP / (cum_TP + cum_FP + 1e-9) # TP / (TP + FP) throw all found object how many are true : 1 -> 0 not monotonic
+
+    ap = every_point_interpolation(recall, precision)
+    return ap
+
+
+def mean_average_precision(detected_boxes, target_boxes, num_cls=20):
+    iou_thresholds = torch.linspace(0.5, 0.95, 10)   # 0.50, 0.55, ..., 0.95
+
+    ap_table = [] # rows = classes with GT, cols = thresholds
+    for c in range(num_cls):
+        # find AP for this class at each IoU threshold
+        aps = [average_precision(detected_boxes, target_boxes, c, thrsh.item() ) for thrsh in iou_thresholds]
+        if aps[0] is None: # no GT for this class
+            continue
+        ap_table.append(aps)
+
+    if len(ap_table) == 0:
+        return {"mAP_50": 0.0, "mAP_75": 0.0, "mAP_5095": 0.0}
+
+    ap_table = torch.tensor(ap_table)    # (num_valid_classes, 10)
+
+    return {
+        "mAP_50":   ap_table[:, 0].mean().item(),   # mean over classes IoU with GT 0.50
+        "mAP_75":   ap_table[:, 5].mean().item(),   # mean over classes IoU with GT IoU 0.75
+        "mAP_5095": ap_table.mean().item(),         # mean over classes AND thresholds 0.50->0.95
+    }
+
+def val_map(model,anchors, img_dir_path, label_dir_path, device="cpu", conf_threshold=0.001, iou_boxes_threshold=0.5):
+    detected_boxes, target_boxes = get_all_boxes(model, anchors, img_dir_path, label_dir_path, device, conf_threshold, iou_boxes_threshold)
+
+    mAP = mean_average_precision(detected_boxes, target_boxes)
+
+    print("mAP@0.5: {:.4f}  mAP@0.75: {:.4f}  mAP@[.5:.95]: {:.4f}".format(
+        mAP["mAP_50"], mAP["mAP_75"], mAP["mAP_5095"]))
+    return mAP
