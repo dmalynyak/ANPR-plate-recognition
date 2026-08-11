@@ -1,8 +1,16 @@
 import os, torch
 
+import torchvision
 from PIL import Image
 from torchvision import transforms
-from src.train_architecture.yolov2_train_architecture import get_iou_centered
+# from src.train_architecture.yolov2_train_architecture import get_iou_centered
+
+# same units (cell used, so anchor should be devided by 13)
+def get_iou_centered(box1, box2):
+    intersection = torch.min(box1[0], box2[0]) * torch.min(box1[1], box2[1])
+    area = box1[0]*box1[1] + box2[0]*box2[1]
+
+    return intersection / ( area  - intersection + 1e-6)
 
 # images names must be sorted before usage
 def garbage_names_clean(all_names, labels_dir_path):
@@ -85,6 +93,16 @@ class YOLOv2Dataset(torch.utils.data.Dataset):
         image = self.transform(image)
 
         boxes = get_boxes_from_label(label_path)
-        gt = encode_target(boxes, self.anchors)
+        gt = encode_target(boxes, self.anchors) # (B, 3, 416, 416)
 
         return image, gt
+
+def load_one_image(image_path, size=416, device="cpu"):
+
+    img = Image.open(image_path).convert("RGB")
+    tf = torchvision.transforms.Compose([
+        torchvision.transforms.Resize((size, size)),
+        torchvision.transforms.ToTensor(),
+    ])
+    x = tf(img) # (3, 416, 416)
+    return x.unsqueeze(0).to(device) # (1, 3, 416, 416)
