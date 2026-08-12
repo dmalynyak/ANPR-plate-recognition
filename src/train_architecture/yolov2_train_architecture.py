@@ -67,7 +67,7 @@ def get_anchors(labels_path):
     anchors = 13 * torch.rand(5, 2)
 
     anch_iter = 0
-    for passes in range(100):
+    for passes in range(10):
         flag = False
         anch_change = 0
         anch_iter += 1
@@ -171,7 +171,7 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
 
 
     # mixed precision (AMP) = autocast + GradScaler
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == "cuda"))
+    scaler = torch.amp.GradScaler(enabled=(device.type == "cuda"))
 
     # warmup learning rate. increases lr from 0.1%optim.lr up to 100&optim.lr throw 1000 steps
     warmup_lr_scheduler = scheduler # get_warmup_schedualer(optimizer) is used in yolov2_train.py
@@ -182,7 +182,8 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
         images = images.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
 
-        with torch.autocast(device_type=device.type, dtype=torch.float16):
+        amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
+        with torch.autocast(device_type=device.type, dtype=amp_dtype):
             predictions = model(images)  # runs in mixed precision(float32 default and float16 if operation allows worse precision)
             loss = criterion(predictions, targets)
 
@@ -313,7 +314,7 @@ def nms(detections, iou_boxes_threshold=0.5):
 
 def get_detected_boxes(pred, anchors, conf_threshold = 0.001, iou_boxes_threshold = 0.5):
 
-    device = "cpu"
+    device = pred.device
     dec = decode_prediction(pred, anchors, device)
 
     obj = dec[..., 4] # (13, 13, 5)
@@ -376,16 +377,17 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device, conf_thr
         img = load_one_image(img_path, 416, device)
 
         with torch.no_grad():
-            pred = model(img)[0]  # (13, 13, 5, 25)
-            one_detected_boxes = get_detected_boxes(pred, anchors, conf_threshold, iou_boxes_threshold) # (N, 6)
-            idx = torch.full((one_detected_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
-            one_detected_boxes = torch.cat([idx, one_detected_boxes], dim=1)
-            detected_boxes.append(one_detected_boxes)
+            pred = model(img)[0].to("cpu")  # (13, 13, 5, 25)
 
-            one_target_boxes = get_target_boxes(label_path) # (M, 5)
-            idx = torch.full((one_target_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
-            one_target_boxes = torch.cat([idx, one_target_boxes], dim=1)
-            target_boxes.append(one_target_boxes)
+        one_detected_boxes = get_detected_boxes(pred, anchors, conf_threshold, iou_boxes_threshold) # (N, 6)
+        idx = torch.full((one_detected_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
+        one_detected_boxes = torch.cat([idx, one_detected_boxes], dim=1)
+        detected_boxes.append(one_detected_boxes)
+
+        one_target_boxes = get_target_boxes(label_path) # (M, 5)
+        idx = torch.full((one_target_boxes.shape[0], 1), float(img_id), dtype=one_detected_boxes.dtype, device=one_detected_boxes.device)
+        one_target_boxes = torch.cat([idx, one_target_boxes], dim=1)
+        target_boxes.append(one_target_boxes)
 
     return detected_boxes, target_boxes
 

@@ -1,9 +1,28 @@
-import os, sys, torch, time
+import os, sys, torch, time, argparse
 
 from src.train_architecture import yolov2_train_architecture
 from src.models import yolov2_model
 from src.data_loaders import yolov2_dataload
 
+def resolve_device(name):
+    name = name.lower()
+    if name == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    if name == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("CUDA requested but not available on this machine")
+        return torch.device("cuda")
+    if name == "mps":
+        if not torch.backends.mps.is_available():
+            raise RuntimeError("MPS requested but not available on this machine")
+        return torch.device("mps")
+    if name == "cpu":
+        return torch.device("cpu")
+    raise ValueError(f"unknown device '{name}'")
 
 
 def train_logic(model, optimizer, scheduler, anchors, detection_criterion, epoch_start, epoch_end, save_path, device):
@@ -38,7 +57,7 @@ def train_logic(model, optimizer, scheduler, anchors, detection_criterion, epoch
         if val_loss < best_val_loss:
             yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_loss_epoch{epoch}")
 
-        metrics = yolov2_train_architecture.val_map(model,anchors, img_val_path, labels_val_path)
+        metrics = yolov2_train_architecture.val_map(model,anchors, img_val_path, labels_val_path, device)
         if metrics["mAP_5095"] > best_map:
             best_map = metrics["mAP_5095"]
             yolov2_train_architecture.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_mAP_epoch{epoch}")
@@ -46,14 +65,13 @@ def train_logic(model, optimizer, scheduler, anchors, detection_criterion, epoch
         yolov2_train_architecture.save_model_weights(model, epoch, save_path=save_path, name='weights')
 
 
-def train_from_zero(save_path):
+def train_from_zero(save_path, device):
 
     os.makedirs(save_path, exist_ok=True)
-    device = torch.device("mps")
     print("using", device)
 
     start = time.perf_counter()
-    anchors = yolov2_train_architecture.get_anchors("data/dataset/od_nomeroff/labels/train")
+    anchors = yolov2_train_architecture.get_anchors("data/dataset/od_nomeroff/labels/val")
     end = time.perf_counter()
     elapsed = end - start
     print(f"anchors are defined: {anchors}, time: {elapsed:.3f}")
@@ -66,10 +84,9 @@ def train_from_zero(save_path):
     train_logic(model, optimizer, scheduler, anchors, detection_criterion, epoch_start=0, epoch_end=30, save_path=save_path, device=device)
 
 
-def train_resume(load_path, save_path):
+def train_resume(load_path, save_path, device):
 
     os.makedirs(save_path, exist_ok=True)
-    device = torch.device("mps")
     print("using", device)
 
     model = yolov2_model.YOLOv2().to(device)
@@ -84,9 +101,20 @@ def train_resume(load_path, save_path):
     train_logic(model, optimizer, scheduler, anchors,  detection_criterion, epoch_start, epoch_end=30, save_path=save_path, device=device)
 
 
+
 def main():
-    train_from_zero("models_test/yolov2_third")
-    # train_resume("models_test/yolov2_first/best.pt", "models_test/yolov2_first")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--device", default="auto", choices=["auto", "cuda", "mps", "cpu"])
+    parser.add_argument("--save-path", help="path to folder where model states will be saved")
+    parser.add_argument("--resume", default=None, help="checkpoint path WITHOUT .pt to resume from")
+    args = parser.parse_args()
+
+    device = resolve_device(args.device)
+
+    if args.resume:
+        train_resume(args.resume, args.save_path, device)
+    else:
+        train_from_zero(args.save_path, device)
 
 if __name__ == "__main__":
     main()
