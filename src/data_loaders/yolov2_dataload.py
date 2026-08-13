@@ -3,7 +3,6 @@ import os, torch
 import torchvision
 from PIL import Image
 from torchvision import transforms
-# from src.train_architecture.yolov2_train_architecture import get_iou_centered
 
 # same units (cell used, so anchor should be devided by 13)
 def get_iou_centered(box1, box2):
@@ -106,3 +105,29 @@ def load_one_image(image_path, size=416, device="cpu"):
     ])
     x = tf(img) # (3, 416, 416)
     return x.unsqueeze(0).to(device) # (1, 3, 416, 416)
+
+# saves current state of training. Evaluate after each epoch.
+def save_model_state(model, optimizer, epoch, scheduler, anchors, save_path, name):
+    torch.save({
+        "epoch": epoch,
+        "state_dict": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "anchors": anchors,
+    }, f"{save_path}/{name}.pt")
+    print(f"saved {name} model: epoch: {epoch}")
+
+
+# loads all model training data. Used for resuming training
+def load_model_state(model, optimizer, scheduler, load_path, device):
+    checkpoint = torch.load(f"{load_path}.pt", map_location=device)
+    model.load_state_dict(checkpoint["state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    epoch = checkpoint["epoch"]
+    anchors = checkpoint["anchors"]
+    return model, optimizer, scheduler, anchors, epoch
+
+def save_model_weights(model, epoch, save_path, name):
+    torch.save(model.state_dict(), f"{save_path}/{name}_epoch_{epoch}.pt")
+    print(f"saved {save_path}/{name}/epoch_{epoch}.pt weights")
