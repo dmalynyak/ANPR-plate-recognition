@@ -2,7 +2,7 @@ import os
 import time, torch
 from pathlib import Path
 from torch import nn
-from torch.optim.lr_scheduler import LinearLR
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from tqdm import tqdm
 
 
@@ -56,12 +56,20 @@ def get_anchors(labels_path):
     files = list(folder_path.iterdir())
 
     for file_path in tqdm(files, desc="reading labels for anchors"):
-        with open(file_path, 'r') as file:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
             for line in file:
+                line = line.replace('\x00', '').strip()
                 if not line.split():
                     continue
                 parts = line.split()
-                boxes.append([float(parts[-2]), float(parts[-1]), -1])
+                if len(parts) < 2:
+                    continue
+                try:
+                    w = float(parts[-2])
+                    h = float(parts[-1])
+                    boxes.append([w, h, -1])
+                except ValueError:
+                    continue
 
     anchors = 13 * torch.rand(5, 2)
 
@@ -127,8 +135,10 @@ class YOLOv2Loss(nn.Module):
 
                 b0x1, b0y1 = dec[..., 0] - dec[..., 2] / 2, dec[..., 1] - dec[..., 3] / 2
                 b0x2, b0y2 = dec[..., 0] + dec[..., 2] / 2, dec[..., 1] + dec[..., 3] / 2
-                b1x1, b1y1 = gt[..., 0] - gt[..., 2] / 2, gt[..., 1] - gt[..., 3] / 2
-                b1x2, b1y2 = gt[..., 0] + gt[..., 2] / 2, gt[..., 1] + gt[..., 3] / 2
+                gcx = gt[..., 0] + cx
+                gcy = gt[..., 1] + cy
+                b1x1, b1y1 = gcx - gt[..., 2] / 2, gcy - gt[..., 3] / 2
+                b1x2, b1y2 = gcx + gt[..., 2] / 2, gcy + gt[..., 3] / 2
 
                 intersection = (torch.min(b0x2, b1x2) - torch.max(b0x1, b1x1)).clamp(0) * (
                             torch.min(b0y2, b1y2) - torch.max(b0y1, b1y1)).clamp(0)
@@ -153,6 +163,18 @@ class YOLOv2Loss(nn.Module):
         confidence_noobj_error = self.l_noobj * ( (1 - objectness) * (torch.sigmoid(predictions[..., 4])) ** 2).sum()
 
         return (center_error + offset_error_h + offset_error_w + confidence_obj_error + class_error + confidence_noobj_error) / batch_size
+
+def build_scheduler(optimizer, epochs, steps_per_epoch, warmup_epochs=3, min_lr_ratio=0.01):
+    base_lr      = optimizer.param_groups[0]["lr"]
+    total_steps  = epochs * steps_per_epoch
+    warmup_steps = warmup_epochs * steps_per_epoch
+
+    warmup = LinearLR(optimizer, start_factor=1e-3, end_factor=1.0, total_iters=warmup_steps)
+
+    cosine = CosineAnnealingLR(optimizer, T_max=total_steps - warmup_steps,
+                               eta_min=base_lr * min_lr_ratio)
+
+    return SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps])
 
 def get_warmup_schedualer(optimizer):
     warmup_lr_scheduler = LinearLR(
