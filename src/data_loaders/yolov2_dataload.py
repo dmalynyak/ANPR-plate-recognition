@@ -114,13 +114,13 @@ def save_model_state(model, optimizer, epoch, scheduler, anchors, save_path, nam
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
         "anchors": anchors,
-    }, f"{save_path}/{name}.pt")
+    }, f"{save_path}/{name}")
     print(f"saved {name} model: epoch: {epoch}")
 
 
 # loads all model training data. Used for resuming training
 def load_model_state(model, optimizer, scheduler, load_path, device):
-    checkpoint = torch.load(f"{load_path}.pt", map_location=device)
+    checkpoint = torch.load(f"{load_path}", map_location=device)
     model.load_state_dict(checkpoint["state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
@@ -128,6 +128,9 @@ def load_model_state(model, optimizer, scheduler, load_path, device):
     anchors = checkpoint["anchors"]
     return model, optimizer, scheduler, anchors, epoch
 
-def save_model_weights(model, epoch, save_path, name):
-    torch.save(model.state_dict(), f"{save_path}/{name}_epoch_{epoch}.pt")
-    print(f"saved {save_path}/{name}/epoch_{epoch}.pt weights")
+def save_model_weights(model, anchors, save_path, name):
+    torch.save({
+        "state_dict": model.state_dict(),
+        "anchors": anchors,
+    }, f"{save_path}/{name}")
+    print(f"saved {save_path}/{name} weights")

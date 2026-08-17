@@ -60,10 +60,13 @@ def train_logic(model, optimizer, scheduler_state, anchors, detection_criterion,
         # yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, save_path=save_path, name='latest')
         end = time.perf_counter()
         elapsed = end - start
+        with open(save_path + "/val_metrics.csv", "a") as f:
+            f.write("epoch_{}, train_loss: {:.4f}, val_loss: {:.4f}\n".format(
+                epoch,   train_loss,           val_loss, ))
         print(f"epoch: {epoch} train loss: {train_loss:.3f}, val loss: {val_loss}, time val_loss: {elapsed:.3f}s.")
 
-        if val_loss < best_val_loss:
-            yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_loss_epoch{epoch}")
+        # if val_loss < best_val_loss:
+        #     yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_loss_epoch{epoch}")
 
         if epoch % 5 == 0:
             print(f"epoch {epoch}, calculating validation mAP...")
@@ -72,16 +75,16 @@ def train_logic(model, optimizer, scheduler_state, anchors, detection_criterion,
 
             with open(save_path + "/val_metrics.csv", "a") as f:
                 f.write("epoch_{}, val_loss: {:.4f}, mAP@0.5: {:.4f},  mAP@0.75: {:.4f},  mAP@[.5:.95]: {:.4f}\n".format(
-                    epoch, val_loss, metrics["mAP_50"], metrics["mAP_75"], metrics["mAP_5095"]))
+                    epoch,   val_loss,        metrics["mAP_50"], metrics["mAP_75"], metrics["mAP_5095"]))
 
             end = time.perf_counter()
             elapsed = end - start
             print(f"took {elapsed:.3f} seconds")
             if metrics["mAP_5095"] > best_map:
                 best_map = metrics["mAP_5095"]
-                yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_mAP_epoch{epoch}")
+                yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_mAP_epoch{epoch}.pt")
+                yolov2_dataload.save_model_weights(model, anchors, save_path=save_path, name='weights.pt')
 
-        yolov2_dataload.save_model_weights(model, epoch, save_path=save_path, name='weights')
 
 
 def train_from_zero(save_path, device):
