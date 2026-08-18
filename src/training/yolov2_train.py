@@ -16,7 +16,7 @@ def resolve_device(name):
         return torch.device("cpu")
     if name == "cuda":
         if not torch.cuda.is_available():
-            raise RuntimeError("CUDA requested but not available on this machine")
+            raise RuntimeError("testCUDA requested but not available on this machine")
         return torch.device("cuda")
     if name == "mps":
         if not torch.backends.mps.is_available():
@@ -39,9 +39,9 @@ def train_logic(model, optimizer, scheduler_state, anchors, detection_criterion,
     dataset_val = yolov2_dataload.YOLOv2Dataset  (img_val_path,   labels_val_path,   anchors)
     dataset_test = yolov2_dataload.YOLOv2Dataset (img_test_path,  labels_test_path,  anchors)
 
-    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=4,persistent_workers=True, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=4, shuffle=False, num_workers=4, persistent_workers=True, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=4, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=16, shuffle=True, num_workers=4,persistent_workers=True, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=16, shuffle=False, num_workers=4, persistent_workers=True, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=16, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
 
     steps_per_epoch = len(train_loader)
     scheduler = yolov2_train_architecture.build_scheduler(optimizer, epochs=50, steps_per_epoch=steps_per_epoch)
@@ -83,7 +83,9 @@ def train_logic(model, optimizer, scheduler_state, anchors, detection_criterion,
             if metrics["mAP_5095"] > best_map:
                 best_map = metrics["mAP_5095"]
                 yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"best_mAP_epoch{epoch}.pt")
-                yolov2_dataload.save_model_weights(model, anchors, save_path=save_path, name='weights.pt')
+                yolov2_dataload.save_model_weights(model, anchors, save_path=save_path, name='best_weights.pt')
+
+        yolov2_dataload.save_model_state(model, optimizer, epoch, scheduler, anchors, save_path=save_path, name=f"last.pt")
 
 
 
@@ -105,14 +107,14 @@ def train_from_zero(save_path, device):
     detection_criterion = yolov2_train_architecture.YOLOv2Loss(anchors).to(device)
 
     scheduler_state = None
-    train_logic(model, optimizer, scheduler_state, anchors, detection_criterion, epoch_start=0, epoch_end=30, save_path=save_path, device=device)
+    train_logic(model, optimizer, scheduler_state, anchors, detection_criterion, epoch_start=0, epoch_end=50, save_path=save_path, device=device)
 
 
 def train_resume(load_path, save_path, device):
     os.makedirs(save_path, exist_ok=True)
 
-    checkpoint = torch.load(f"{load_path}.pt", map_location=device)
-    anchors = checkpoint["anchors"]
+    checkpoint = torch.load(f"{load_path}", map_location=device)
+    anchors = checkpoint["anchors"].cpu()
     epoch_start = checkpoint["epoch"]
 
     model = yolov2_model.YOLOv2().to(device)
@@ -122,16 +124,17 @@ def train_resume(load_path, save_path, device):
     optimizer.load_state_dict(checkpoint["optimizer"])
 
     detection_criterion = yolov2_train_architecture.YOLOv2Loss(anchors).to(device)
+    print(f"Resuming training from epoch {epoch_start} with anchors:\n{anchors}")
 
     train_logic(model, optimizer, checkpoint["scheduler"], anchors, detection_criterion,
-                epoch_start, epoch_end=30, save_path=save_path, device=device)
+                epoch_start + 1, epoch_end=50, save_path=save_path, device=device)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="auto", choices=["auto", "cuda", "mps", "cpu"])
     parser.add_argument("--save-path", help="path to folder where model states will be saved")
-    parser.add_argument("--resume", default=None, help="checkpoint path WITHOUT .pt to resume from")
+    parser.add_argument("--resume", default=None, help="checkpoint path with .pt to resume from")
     args = parser.parse_args()
 
     device = resolve_device(args.device)
