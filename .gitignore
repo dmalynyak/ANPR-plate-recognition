@@ -1,8 +1,8 @@
 .venv/
 .idea/
 .DS_Store
-__pycache__/
 *.pyc
+__pycache__/ # adds all folders from project with this name
 excess/
 cache/
 data/
