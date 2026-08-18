@@ -1,6 +1,6 @@
 import os
 import torch
-from src.data_loaders.yolov2_dataload import garbage_names_clean, load_one_image
+from src.data_loaders.yolov2_dataload import garbage_names_clean, load_one_image_path
 
 # structure:
 # val_map:
@@ -130,7 +130,7 @@ def decode_prediction(pred, anchors, device):
         dec[..., 3] = ph * torch.exp(pred[..., 3])
         dec[..., 4] = torch.sigmoid(pred[..., 4])
         dec[..., 5:25] = torch.softmax(pred[..., 5:25], dim=-1)
-        return dec
+        return dec # xy - img units, wh - cell units
 
 
 def iou_thrd_mask(box, boxes): # (4,) and (N, 4) returns (N,)
@@ -233,7 +233,7 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
 
         # now runs for batch and not for single image
         imgs = torch.cat(
-            [load_one_image(os.path.join(img_dir_path, n), 416, device)
+            [load_one_image_path(os.path.join(img_dir_path, n), 416, device)
              for n in batch_names], dim=0)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16

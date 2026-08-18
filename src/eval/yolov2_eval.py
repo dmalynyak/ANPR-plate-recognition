@@ -13,7 +13,7 @@ def eval_one_model(load_path, save_path, device):
 
     model = yolov2_model.YOLOv2().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    scheduler = yolov2_train_architecture.get_warmup_schedualer(optimizer)
+    scheduler = yolov2_train_architecture.build_scheduler(optimizer, epochs=1, steps_per_epoch=1) # do not need it, used for load_model_state syntax
 
     model, optimizer, scheduler, anchors, epoch = yolov2_dataload.load_model_state(model, optimizer, scheduler, load_path, device)
 
@@ -31,13 +31,14 @@ def eval_one_model(load_path, save_path, device):
     test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=4, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
 
     start = time.perf_counter()
-    print("calculating validation loss...")
+    print("calculating test/validation loss...")
     val_loss = yolov2_eval_architecture.val_loss(model, val_loader, detection_criterion, device)
+    test_loss = yolov2_eval_architecture.val_loss(model, test_loader, detection_criterion, device)
     end = time.perf_counter()
     elapsed = end - start
-    print(f"val loss: {val_loss}, time val_loss: {elapsed:.3f}s.")
+    print(f"val loss: {val_loss}, test loss: {test_loss}, time val_loss: {elapsed:.3f}s.")
 
-    print(f"calculating validation mAP...")
+    print(f"calculating test/validation mAP...")
     start = time.perf_counter()
     metrics_val = yolov2_eval_architecture.val_map(model,anchors, img_val_path, labels_val_path, device)
     metrics_test = yolov2_eval_architecture.val_map(model,anchors, img_test_path, labels_test_path, device)
