@@ -93,8 +93,8 @@ def val_loss(model, loader, criterion, device):
             targets = targets.to(device)
 
             amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-            # with torch.autocast(device_type=device.type, dtype=amp_dtype):
-            predictions = model(images)
+            with torch.autocast(device_type=device.type, dtype=amp_dtype):
+                predictions = model(images)
             loss = criterion(predictions, targets)
             total += loss.item()
     return total / len(loader)
@@ -219,8 +219,7 @@ def get_target_boxes(label_path):
 
 @torch.no_grad()
 def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
-                  conf_threshold=0.001, iou_boxes_threshold=0.5,
-                  batch_size=16, max_det=100):
+                  conf_threshold=0.001, iou_boxes_threshold=0.5, batch_size=16, max_det=100):
     model.eval()
     anchors = anchors.to(device)
 
@@ -239,16 +238,15 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
              for n in batch_names], dim=0)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-        # with torch.autocast(device_type=device.type, dtype=amp_dtype):
-        preds = model(imgs)
-        preds = preds.float()
+        with torch.autocast(device_type=device.type, dtype=amp_dtype):
+            preds = model(imgs)
+            preds = preds.float()
 
         for b, name in enumerate(batch_names):
             img_id = start + b
 
 
-            one_det = get_detected_boxes(preds[b], anchors,
-                                         conf_threshold, iou_boxes_threshold)
+            one_det = get_detected_boxes(preds[b], anchors, conf_threshold, iou_boxes_threshold)
 
             if one_det.shape[0] > max_det:
                 keep = one_det[:, 4].argsort(descending=True)[:max_det]
@@ -258,8 +256,7 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
             idx = torch.full((one_det.shape[0], 1), float(img_id))
             detected_boxes.append(torch.cat([idx, one_det], dim=1))
 
-            label_path = os.path.join(label_dir_path,
-                                      os.path.splitext(name)[0] + '.txt')
+            label_path = os.path.join(label_dir_path, os.path.splitext(name)[0] + '.txt')
             one_gt = get_target_boxes(label_path) # (M,5) CPU
             idx = torch.full((one_gt.shape[0], 1), float(img_id))
             target_boxes.append(torch.cat([idx, one_gt], dim=1))
