@@ -1,5 +1,5 @@
-from torch import nn
 import torch
+from torch import nn
 
 
 class ConvBlock(nn.Module):
@@ -15,7 +15,7 @@ class ConvBlock(nn.Module):
         return self.conv(x)
 
 
-# backbone for both classification (pre-training) and detection
+# backbone for both classification (pre-training) and detection (using original paper)
 class Darknet19(nn.Module):
     def __init__(self):
         super().__init__()
@@ -70,9 +70,9 @@ class ClassificationHead(nn.Module):
 
         self.head = nn.Sequential(
             nn.Conv2d(in_channels=1024, out_channels=1000, kernel_size=1, stride=1, padding=0), # 1024,7 -> 1000,7 without Batch normalization and MaxPooling
-            nn.AdaptiveAvgPool2d(1), # input-whatever, output (1, 1) 1000,7,7 -> 1000,1,1
+            nn.AdaptiveAvgPool2d(1), # input - whatever, output (1, 1) 1000,7,7 -> 1000,1,1
             nn.Flatten(), # B,1000,1,1 -> B,1000
-            # nn.Softmax(dim=1), # CCE applies log-softmax
+            # nn.Softmax(dim=1), # CCE loss function applies log-softmax itself
         )
     def forward(self, x):
         return self.head(x)
@@ -90,14 +90,14 @@ class DetectionHead(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=1024, out_channels=125, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x, passthrow_raw):
-        x = self.conv1(x)   #(B, 1024, 13, 13)
-        x = self.conv2(x)   #(B, 1024, 13, 13)
-        passthrow = self.rearrange(passthrow_raw)    #(B, 512, 26, 26) -> (B, 2048, 13, 13)
-        x = torch.cat([x, passthrow], dim=1)    #(B, 1024+2048, 13, 13)
+        x = self.conv1(x) # (B, 1024, 13, 13)
+        x = self.conv2(x) # (B, 1024, 13, 13)
+        passthrow = self.rearrange(passthrow_raw) #(B, 512, 26, 26) -> (B, 2048, 13, 13)
+        x = torch.cat([x, passthrow], dim=1) # (B, 1024+2048, 13, 13)
         x = self.conv3(x)
         x = self.conv4(x) # (B, 125, 13, 13)
-        x = x.permute(0, 2, 3, 1)  # (B, 13, 13, 125)
-        x = x.reshape(x.shape[0], 13, 13, 5, 25)  # (B, 13, 13, 5, 25)
+        x = x.permute(0, 2, 3, 1) # (B, 13, 13, 125)
+        x = x.reshape(x.shape[0], 13, 13, 5, 25) # (B, 13, 13, 5, 25)
         return x
 
 
