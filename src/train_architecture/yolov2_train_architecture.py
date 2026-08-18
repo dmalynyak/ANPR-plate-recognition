@@ -192,7 +192,7 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
 
 
     # mixed precision (AMP) = autocast + GradScaler
-    scaler = torch.amp.GradScaler(enabled=(device.type == "cuda"))
+    scaler = torch.amp.GradScaler(enabled=(device.type == "cudaa"))
 
     # warmup learning rate. increases lr from 0.1%optim.lr up to 100&optim.lr throw 1000 steps
     warmup_lr_scheduler = scheduler # get_warmup_schedualer(optimizer) is used in yolov2_train.py
@@ -204,9 +204,9 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
         targets = targets.to(device, non_blocking=True)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-        with torch.autocast(device_type=device.type, dtype=amp_dtype):
-            predictions = model(images)  # runs in mixed precision(float32 default and float16 if operation allows worse precision)
-            loss = criterion(predictions, targets)
+        # with torch.autocast(device_type=device.type, dtype=amp_dtype):
+        predictions = model(images)  # runs in mixed precision(float32 default and float16 if operation allows worse precision)
+        loss = criterion(predictions, targets)
 
         # scaler tries to make autocast training (mixed fp16/32) as precise as plain fp32
         # scales loss with some factor and with chain rule every param.grad gets scaled by the same factor
@@ -221,11 +221,5 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
 
         epoch_loss += loss.item()
         pbar.set_postfix(loss=f"{loss.item():.3f}")
-
-        # if i % 500 == 0:
-        #     torch.save(model.state_dict(), f"{save_path}/latest.pt")
-        #     end = time.perf_counter()
-        #     print(f"saved latest: batch {i}/{len(loader)}  loss {loss.item():.3f} time: {end - start:.3f} \n")
-        #     start = time.perf_counter()
 
     return epoch_loss / len(loader)

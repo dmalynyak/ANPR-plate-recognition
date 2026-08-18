@@ -93,9 +93,9 @@ def val_loss(model, loader, criterion, device):
             targets = targets.to(device)
 
             amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-            with torch.autocast(device_type=device.type, dtype=amp_dtype):
-                predictions = model(images)
-                loss = criterion(predictions, targets)
+            # with torch.autocast(device_type=device.type, dtype=amp_dtype):
+            predictions = model(images)
+            loss = criterion(predictions, targets)
             total += loss.item()
     return total / len(loader)
 
@@ -110,6 +110,7 @@ def val_map(model, anchors, img_dir_path, label_dir_path, device, conf_threshold
     print("mAP@0.5: {:.4f}  mAP@0.75: {:.4f}  mAP@[.5:.95]: {:.4f}".format(
         mAP["mAP_50"], mAP["mAP_75"], mAP["mAP_5095"]))
     return mAP
+
 
 # gives final inference answer (before postprocessing)
 # pred: (13, 13, 5, 25) decoded: (13, 13, 5, 25) FOR ONE IMAGE
@@ -164,6 +165,7 @@ def nms(detections, iou_boxes_threshold=0.5):
     if len(keep_det) == 0:
         return detections.new_zeros((0, 6))
     return torch.stack(keep_det, dim=0)
+
 
 # per one image
 def get_detected_boxes(pred, anchors, conf_threshold=0.001, iou_boxes_threshold=0.5):
@@ -237,8 +239,8 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
              for n in batch_names], dim=0)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-        with torch.autocast(device_type=device.type, dtype=amp_dtype):
-            preds = model(imgs)
+        # with torch.autocast(device_type=device.type, dtype=amp_dtype):
+        preds = model(imgs)
         preds = preds.float()
 
         for b, name in enumerate(batch_names):
