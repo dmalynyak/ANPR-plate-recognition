@@ -5,3 +5,4 @@ typer~=0.27.0
 pillow~=12.3.0
 torchvision~=0.28.0
 ultralytics~=8.4.106
+tqdm~=4.68.3
