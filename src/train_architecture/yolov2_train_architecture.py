@@ -30,6 +30,7 @@ irresponsible:
     λnoobj * (𝜎(to) - 0)² - when IoU(GT, pred) < threshold
 '''
 
+
 # same units (cell used, so anchor should be devided by 13)
 def get_iou_centered(box1, box2):
     intersection = torch.min(box1[0], box2[0]) * torch.min(box1[1], box2[1])
@@ -169,33 +170,22 @@ def build_scheduler(optimizer, epochs, steps_per_epoch, warmup_epochs=3, min_lr_
     total_steps  = epochs * steps_per_epoch
     warmup_steps = warmup_epochs * steps_per_epoch
 
+    # builts warmup scheduler (1e-3 -> lr lineraly during every batch in first 3 epoch)
     warmup = LinearLR(optimizer, start_factor=1e-3, end_factor=1.0, total_iters=warmup_steps)
-
+    # builts cosine scheduler (lr -> min_lr cosinely during every batch after warmup until the last epoch)
     cosine = CosineAnnealingLR(optimizer, T_max=total_steps - warmup_steps,
                                eta_min=base_lr * min_lr_ratio)
 
     return SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps])
 
-def get_warmup_schedualer(optimizer):
-    warmup_lr_scheduler = LinearLR(
-        optimizer,
-        start_factor=1e-3, # start at 0.1% of optimizer lr
-        end_factor=1.0, # increases up to the full optimizer lr
-        total_iters=1000, # over the first 1000 iterations
-    )
-    return warmup_lr_scheduler
 
 def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, device, epoch):
     model.train()
     epoch_loss = 0.0
-    start = time.perf_counter()
 
 
     # mixed precision (AMP) = autocast + GradScaler
-    scaler = torch.amp.GradScaler(enabled=(device.type == "cudaa"))
-
-    # warmup learning rate. increases lr from 0.1%optim.lr up to 100&optim.lr throw 1000 steps
-    warmup_lr_scheduler = scheduler # get_warmup_schedualer(optimizer) is used in yolov2_train.py
+    scaler = torch.amp.GradScaler(enabled=(device.type == "cuda"))
 
     pbar = tqdm(loader, desc=f"epoch {epoch}")
     for i, (images, targets) in enumerate(pbar):
@@ -204,9 +194,9 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
         targets = targets.to(device, non_blocking=True)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-        # with torch.autocast(device_type=device.type, dtype=amp_dtype):
-        predictions = model(images)  # runs in mixed precision(float32 default and float16 if operation allows worse precision)
-        loss = criterion(predictions, targets)
+        with torch.autocast(device_type=device.type, dtype=amp_dtype):
+            predictions = model(images)  # runs in mixed precision(float32 default and float16 if operation allows worse precision)
+            loss = criterion(predictions, targets)
 
         # scaler tries to make autocast training (mixed fp16/32) as precise as plain fp32
         # scales loss with some factor and with chain rule every param.grad gets scaled by the same factor
@@ -217,7 +207,7 @@ def train_epoch(model, loader, criterion, optimizer, scheduler, save_path, devic
 
         scaler.step(optimizer)  # scales grads values down with the same scale factor used in backprop, skips steps if inf/nan appeared
         scaler.update()  # adjust scale factor for next iter based on how much if/nan appears
-        warmup_lr_scheduler.step() # increases lr during warmup
+        scheduler.step() # increases lr during warmup
 
         epoch_loss += loss.item()
         pbar.set_postfix(loss=f"{loss.item():.3f}")
