@@ -32,8 +32,7 @@ class YOLOv1Dataset(torch.utils.data.Dataset):
         all_files = sorted(os.listdir(image_dir))  # returns sorted NAMES (not actual files)
         for name in all_files:
             if os.path.exists(os.path.join(labels_dir_path, os.path.splitext(name)[0] + '.txt')):
-                self.img_files.append(name)
-        # self.img_files = self.img_files[:100]
+                self.img_files.append(name)  
         print(f"kept {len(self.img_files)} / {len(all_files)} images with good labels")
 
     def __len__(self):
