@@ -1,6 +1,6 @@
 import os
 import torch
-from src.data_loaders.yolov2_dataload import garbage_names_clean, load_one_image
+from src.data_loaders.yolov2_dataload import garbage_names_clean, load_one_image_path
 
 # structure:
 # val_map:
@@ -111,6 +111,7 @@ def val_map(model, anchors, img_dir_path, label_dir_path, device, conf_threshold
         mAP["mAP_50"], mAP["mAP_75"], mAP["mAP_5095"]))
     return mAP
 
+
 # gives final inference answer (before postprocessing)
 # pred: (13, 13, 5, 25) decoded: (13, 13, 5, 25) FOR ONE IMAGE
 def decode_prediction(pred, anchors, device):
@@ -164,6 +165,7 @@ def nms(detections, iou_boxes_threshold=0.5):
     if len(keep_det) == 0:
         return detections.new_zeros((0, 6))
     return torch.stack(keep_det, dim=0)
+
 
 # per one image
 def get_detected_boxes(pred, anchors, conf_threshold=0.001, iou_boxes_threshold=0.5):
