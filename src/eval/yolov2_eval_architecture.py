@@ -93,9 +93,9 @@ def val_loss(model, loader, criterion, device):
             targets = targets.to(device)
 
             amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-            with torch.autocast(device_type=device.type, dtype=amp_dtype):
-                predictions = model(images)
-                loss = criterion(predictions, targets)
+            # with torch.autocast(device_type=device.type, dtype=amp_dtype):
+            predictions = model(images)
+            loss = criterion(predictions, targets)
             total += loss.item()
     return total / len(loader)
 
@@ -237,8 +237,8 @@ def get_all_boxes(model, anchors, img_dir_path, label_dir_path, device,
              for n in batch_names], dim=0)
 
         amp_dtype = torch.bfloat16 if device.type == "cpu" else torch.float16
-        with torch.autocast(device_type=device.type, dtype=amp_dtype):
-            preds = model(imgs)
+        # with torch.autocast(device_type=device.type, dtype=amp_dtype):
+        preds = model(imgs)
         preds = preds.float()
 
         for b, name in enumerate(batch_names):
