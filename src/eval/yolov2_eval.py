@@ -27,8 +27,8 @@ def eval_one_model(load_path, save_path, device):
     dataset_val = yolov2_dataload.YOLOv2Dataset  (img_val_path,   labels_val_path,   anchors_cpu)
     dataset_test = yolov2_dataload.YOLOv2Dataset (img_test_path,  labels_test_path,  anchors_cpu)
 
-    val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=4, shuffle=False, num_workers=4, persistent_workers=True, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=4, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(dataset_val, batch_size=16, shuffle=False, num_workers=4, persistent_workers=True, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=16, shuffle=False, num_workers=4,persistent_workers=True, pin_memory=True)
 
     start = time.perf_counter()
     print("calculating validation loss...")
@@ -45,14 +45,14 @@ def eval_one_model(load_path, save_path, device):
     elapsed = end - start
     print(f"took {elapsed:.3f} seconds")
 
-    with open(save_path + "/val_metrics.csv", "a") as f:
+    with open(save_path + "/val_test.csv", "a") as f:
         f.write("epoch_{}, val_loss{:.4f}, mAP@0.5: {:.4f},  mAP@0.75: {:.4f},  mAP@[.5:.95]: {:.4f}\n"
                 "mAP@0.5 test: {:.4f},  mAP@0.75 test: {:.4f},  mAP@[.5:.95] test: {:.4f}\n".format(
             epoch, val_loss, metrics_val["mAP_50"], metrics_val["mAP_75"], metrics_val["mAP_5095"],
                                metrics_test["mAP_50"], metrics_test["mAP_75"], metrics_test["mAP_5095"]))
 
 def main():
-    load_path, save_path, device = "models_test/yolov2_second/best_epoch_6", "models_test/yolov2_second", torch.device("mps")
+    load_path, save_path, device = "models_test/yolov2_1.0/last.pt", "models_test/yolov2_1.0", torch.device("cuda")
     eval_one_model(load_path, save_path, device)
 
 if __name__ == "__main__":
