@@ -1,6 +1,5 @@
-import os, torch
+import os, torch, cv2, torchvision
 
-import torchvision
 from PIL import Image
 from torchvision import transforms
 
@@ -96,7 +95,7 @@ class YOLOv2Dataset(torch.utils.data.Dataset):
 
         return image, gt
 
-def load_one_image(image_path, size=416, device="cpu"):
+def load_one_image_path(image_path, size=416, device="cpu"):
 
     img = Image.open(image_path).convert("RGB")
     tf = torchvision.transforms.Compose([
@@ -105,6 +104,16 @@ def load_one_image(image_path, size=416, device="cpu"):
     ])
     x = tf(img) # (3, 416, 416)
     return x.unsqueeze(0).to(device) # (1, 3, 416, 416)
+
+# the same function as load_one_image_path but for img_bgr = cv2.imread(image_path)
+def get_in_tensor_for_dec(img_bgr, size=416, device="cpu"):
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) # BGR (cv2) -> RGB
+    pil = Image.fromarray(rgb) # numpy -> PIL
+    tf = transforms.Compose([
+        transforms.Resize((size, size)),
+        transforms.ToTensor(),
+    ])
+    return tf(pil).unsqueeze(0).to(device) # (1, 3, 416, 416)
 
 # saves current state of training. Evaluate after each epoch.
 def save_model_state(model, optimizer, epoch, scheduler, anchors, save_path, name):
