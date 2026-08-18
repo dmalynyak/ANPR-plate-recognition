@@ -1,16 +1,9 @@
-import cv2
+import cv2, os, json
 import numpy as np
-import os
-from torch.utils.data import Dataset
-import random
-import torch
-import json
 from PIL import Image
-from torchvision import transforms
 
 
-##############################  CRNN ##################################
-
+# for CRNN
 # ---------- ocr_kaggle ---------------
 
 # image paring, returns 0-1 grayscale np.array(size1, size2) and name
@@ -24,27 +17,7 @@ def img_parcing_kaggle(path, width, heigh):
     return image_gray, name
 
 
-# dataset parsing, returns np.array of pictures + np.array of their names
-def load_dataset_kaggle(folder_path, width, heigh):
-    X_list = []
-    Y_list = []
-
-    for filename in os.listdir(folder_path):
-
-        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):  # choose only images
-            continue
-
-        filepath = os.path.join(folder_path, filename)
-        image_gray, name = img_parcing_kaggle(filepath, width, heigh)
-
-        X_list.append(image_gray)
-        Y_list.append(name)
-
-    return X_list, Y_list
-
-
 # ---------- ocr_nomeroff ---------------
-
 
 def load_dataset_nomeroff(images_folder, descriptions_folder, width, heigh):
     X_list, Y_list = [], []
@@ -85,47 +58,15 @@ def load_cache_nomeroff(images_folder, descriptions_folder, width, heigh, cache_
     return X, Y
 
 
-# ----------- dataset loading -------------- (for torch.utils.data.DataLoader)
-
-
-# makes image randomly different. So model does not memorize dataset, but truly learns
-def dataset_expansion(img):  # (32,128)
-    if random.random() < 0.5:  # 50/50% chance
-        a = random.uniform(-5, 5)  # random rotation (-5%, 5%) - just a number
-        M = cv2.getRotationMatrix2D((64, 16), a, 1)  # returns rotation matrix(cos -sin sin cos)
-        img = cv2.warpAffine(img, M, (128, 32),
-                             borderValue=int(img.mean()))  # applies rotation to img. fills borders with avarage colour
-    if random.random() < 0.5:
-        img = cv2.GaussianBlur(img, (3, 3),
-                               0)  # applies Blur to image - convolution(center - 0.25, edges - 0.125, corners - 0.0625.)
-    if random.random() < 0.5:
-        img = np.clip(img * random.uniform(0.7, 1.3), 0, 255).astype(np.uint8)  # changes brightnes from 70% to 130%
-    return img
-
-
-class PlateDataset(Dataset):
-    def __init__(self, X, Y, expansion=True):
-        self.X, self.Y, self.expansion = X, Y, expansion
-
-    def __len__(self):
-        return len(self.Y)
-
-    def __getitem__(self, i):
-        img = self.X[i]  # (32,128)
-        if self.expansion:
-            img = dataset_expansion(
-                img)  # hardcoded dataset_expansion into dataset loader for torch.utils.data.DataLoader(dataset, batch_size)
-        t = torch.tensor(img, dtype=torch.float32).unsqueeze(0) / 255.0
-        return t, self.Y[i]
-
-
-##############################  OD ##################################
-
+# for YOLO
+# --------------- od_nomeroff ----------------
 
 def via_to_yolo(json_path, images_dir_path, out_dir_path):
     if os.path.exists(out_dir_path):  # if directory with regions exists, then skip all function
-        print(f"dataset length: {len(os.listdir(out_dir_path))}")
+        print(f"parced dataset exists, length: {len(os.listdir(out_dir_path))}")
         return
+    print(f"dataset parcing...")
+
     os.makedirs(out_dir_path, exist_ok=True)
 
     with open(json_path) as f:
@@ -162,72 +103,5 @@ def via_to_yolo(json_path, images_dir_path, out_dir_path):
             out_name = os.path.splitext(fname)[0] + ".txt"
             with open(os.path.join(out_dir_path, out_name), "w") as f:
                 f.write("\n".join(lines))
-# target(7,7,25): for target[i][j]  [0:20] class one-hot   [20] objectness   [21:25] x,y,w,h
-# def encode_yolo_target(raw_boxes): # list of (int(object_class), x, y, w, h)
-#     target = np.zeros((7, 7, 25), dtype=np.float32)
-#     for box in raw_boxes:
-#         class_id, x, y, w, h = box
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][class_id] = 1  # class index
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][20] = 1 # objectness
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][20 + 1] = x # x coordinate
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][20 + 2] = y # y coordinate
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][20 + 3] = w # w width
-#         target[int(x // (1 / 7))][int(y // (1 / 7))][20 + 4] = h # h heigh
-#
-#     return target # (7, 7, 25)
 
-# target(7,7,25): for target[i][j]  [0:20] class one-hot   [20] objectness   [21:25] x,y,w,h
-def encode_yolo_target(raw_boxes):
-    target = np.zeros((7, 7, 25), dtype=np.float32)
-    for class_id, x, y, w, h in raw_boxes:
-        col = min(int(x * 7), 6)
-        row = min(int(y * 7), 6)
-        x_cell = x * 7 - col          # cell relative
-        y_cell = y * 7 - row
-        target[row][col][class_id] = 1  # class index
-        target[row][col][20] = 1 # objectness
-        target[row][col][21] = x_cell # x coordinate
-        target[row][col][22] = y_cell # y coordinate
-        target[row][col][23] = w # w width
-        target[row][col][24] = h # h heigh
-
-    return target # (7, 7, 25)
-
-
-class YoloDataset(Dataset):
-    def __init__(self, image_dir, labels_dir):
-        self.img_dir_path = image_dir
-        all_files = sorted(os.listdir(image_dir)) # returns sorted NAMES (not actual files)
-        self.img_files = [ name for name in all_files
-            if os.path.exists(os.path.join(labels_dir, os.path.splitext(name)[0] + '.txt'))
-        ]
-        # self.img_files = self.img_files[:100]
-        print(f"kept {len(self.img_files)} / {len(all_files)} images with labels")
-        self.labels_dir_path = labels_dir
-
-
-    def __len__(self):
-        return len(self.img_files)
-
-    def __getitem__(self, idx): # returns (image, target) = [(3, 448, 448), (7, 7, 25)]
-        name = self.img_files[idx] # returns file name
-        img_path = os.path.join(self.img_dir_path, name)
-        image = Image.open(img_path).convert('RGB')
-
-        base = os.path.splitext(name)[0]
-        label_path = os.path.join(self.labels_dir_path, base + '.txt')
-        boxes = [] # these boxes are going to be targets to push to during training
-        with open(label_path) as f:
-            for line in f:
-                object_class, x, y, w, h = map(float, line.split())
-                boxes.append((int(object_class), x, y, w, h))
-
-        boxes_encoded = encode_yolo_target(boxes)
-        transform = transforms.Compose([
-            transforms.Resize((448, 448)),  # normalized x,y,w,h unchanged
-            transforms.ToTensor(),  # pixels are [0,1]
-        ])
-        image = transform(image)
-
-
-        return image, boxes_encoded
+    print(f"dataset parced, length: {len(os.listdir(out_dir_path))}")
