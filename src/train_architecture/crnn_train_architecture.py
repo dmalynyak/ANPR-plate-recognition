@@ -1,7 +1,5 @@
 import torch
-
-
-# ------- training --------------
+from tqdm import tqdm
 
 CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -15,10 +13,12 @@ def encode_targets(labels):  # labels = ["AB12", "XYZ"]
     return torch.tensor(flat, dtype=torch.long), torch.tensor(lengths, dtype=torch.long)
 
 
-def train_epoch(model, loader, criterion, optimizer, device):
+def train_epoch(model, loader, criterion, optimizer, device, epoch):
     model.train()  # enables model to train (just changes flag)
     total = 0.0  # accumulates loss for every batch in epoch. interface/debug
-    for images, labels in loader:
+
+    pbar = tqdm(loader, desc=f"epoch {epoch}")
+    for i, (images, labels) in enumerate(pbar):
         images = images.to(device)  # puts images into GPU memmory, so model(images) are performed using GPU
         log_probs = model(images)  # forward pass
         T, B, _ = log_probs.shape  # (T, B, C)
@@ -36,9 +36,6 @@ def train_epoch(model, loader, criterion, optimizer, device):
     return total / len(loader)  # convention
 
 
-# ---------- decoding ---------- (parce final prediction from algorithm results)
-
-
 # decods one image. from CTC results to actual label
 def decode_image(log_probs):  # (32, B, 37)
     idx = log_probs.argmax(2)  # (32, B) - value is index
@@ -54,7 +51,7 @@ def decode_image(log_probs):  # (32, B, 37)
     return out
 
 
-# decods only one batch, so it is much faster (interface/debug)
+# decods only one batch, so it is much faster (for debug)
 # prints only first name
 def decode_batch(model, loader):
     model.eval()
@@ -64,9 +61,6 @@ def decode_batch(model, loader):
         print(f"prediction: {preds[0]}, actual: {labels[0]}")
 
     return preds
-
-
-# ---------- testing and validation -------------------
 
 
 def validation(model, loader, criterion, device):
@@ -87,7 +81,7 @@ def validation(model, loader, criterion, device):
 
     return total / len(loader)  # sum of loss of all batches / number of batches
 
-
+# for more visually understandable information during training
 def test_model(model, loader, device):
     model.eval()
     total, correct = 0, 0
@@ -108,7 +102,7 @@ def test_model(model, loader, device):
 
     return correct / total, correct_symbols / total_symbols
 
-
+# for final testing on test_dataset
 def test_model_debug(model, loader, device):
     model.eval()
     total, correct = 0, 0
