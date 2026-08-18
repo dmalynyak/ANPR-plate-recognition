@@ -1,9 +1,5 @@
-import time
-
-import torch
-from torch import nn
-
-# -----------------------  LOSS function and helper functions  ----------------
+import torch, time
+from tqdm import tqdm
 
 
 #           (B, 7, 7, 4)
@@ -17,6 +13,7 @@ def get_iou(box0, box1):
     area = box0[:, :, :, 2:3]*box0[:, :, :, 3:4] + box1[:, :, :, 2:3]*box1[:, :, :, 3:4]
 
     return intersection / (area - intersection + 1e-6)
+
 
 #            (B,7,7,4)(B,1,7,1)(B,7,1,1)
 def cell_to_img(box, rows, cols): # transforms cell relative x,y from 'taget' to image relative for 'prediction'
@@ -38,7 +35,7 @@ def criterion(predictions, targets):
 
     iou0 = get_iou(cell_to_img(predictions[..., 21:25], rows, cols), cell_to_img(targets[:, :, :, 21:25], rows, cols))
     iou1 = get_iou(cell_to_img(predictions[..., 26:30], rows, cols), cell_to_img(targets[:, :, :, 21:25], rows, cols))
-    best_iou = torch.max(iou0, iou1) # finds max value for everu cell
+    best_iou = torch.max(iou0, iou1) # finds max value for every cell
 
     # mask -def- tensor with booleans
     objectness_mask = targets[:, :, :, 20:21]
@@ -69,12 +66,14 @@ def criterion(predictions, targets):
 
 # -------------------  train/test/val  --------------
 
-def train_epoch(model, loader, criterion, optimizer, device):
+
+def train_epoch(model, loader, criterion, optimizer, device, epoch):
     model.train()
     epoch_loss = 0.0
     start = time.perf_counter()
 
-    for i, (images, targets) in enumerate(loader):
+    pbar = tqdm(loader, desc=f"epoch {epoch}")
+    for i, (images, targets) in enumerate(pbar):
         images = images.to(device)
         targets = targets.to(device)
         predictions = model(images) #  (B, 7, 7, 30)
