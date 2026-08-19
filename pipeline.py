@@ -7,9 +7,9 @@ from src.eval import yolov2_eval_architecture
 from src.data_loaders import yolov2_dataload
 
 # global varibles, so functions see them. (They are not downloaded every time function calls them)
-yolo8n_detector = YOLO("weights/yolo/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset
+yolo8n_detector = YOLO("weights/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset
 recognizer = crnn_model.CRNN()  # CRNN class (has forvard method in it)
-recognizer.load_state_dict(torch.load("weights/ocr/crnn_best.pt", map_location="cpu"))
+recognizer.load_state_dict(torch.load("weights/crnn_best.pt", map_location="cpu"))
 recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models_test forward pass
 
 
@@ -144,7 +144,7 @@ def decode_plate_v2_frame(frame, *args, **kwargs):
     return decode_plate_v2(frame, *args, **kwargs)
 
 def draw_img_v2(image_path, out_path, conf_threshold, iou_threshold, device="cpu"):
-    checkpoint = torch.load("weights/yolo/yolov2_best.pt", map_location=device)
+    checkpoint = torch.load("weights/yolov2_best.pt", map_location=device)
     yolov2_detector = yolov2_model.YOLOv2().to(device)
     yolov2_detector.load_state_dict(checkpoint["state_dict"])
     anchors = checkpoint["anchors"].to(device)
@@ -162,7 +162,7 @@ def draw_img_v2(image_path, out_path, conf_threshold, iou_threshold, device="cpu
 
 
 def draw_video_v2(video_in_path, video_out_path, conf_threshold, iou_threshold, device="cpu"):
-    checkpoint = torch.load("weights/yolo/yolov2_best.pt", map_location=device)
+    checkpoint = torch.load("weights/yolov2_best.pt", map_location=device)
     yolov2_detector = yolov2_model.YOLOv2().to(device)
     yolov2_detector.load_state_dict(checkpoint["state_dict"])
     anchors = checkpoint["anchors"].to(device)
@@ -204,6 +204,15 @@ def procces(in_path):
     extension = os.path.splitext(in_path)[1].lower() # splits extension
     base = os.path.splitext(in_path)[0] # splits path
 
+    # if extension in IMAGE_EXTS:
+    #     out_path = base + "_out.png"
+    #     draw_img_v2(in_path, out_path, conf_threshold=0.4, iou_threshold=0.5, device="cpu")
+    # elif extension in VIDEO_EXTS:
+    #     out_path = base + "_out.mp4"
+    #     draw_video_v2(in_path, out_path, conf_threshold=0.4, iou_threshold=0.5, device="cpu")
+    # else:
+    #     print("Unsupported file type")
+
     if extension in IMAGE_EXTS:
         out_path = base + "_out.png"
         draw_img_8n(in_path, out_path)
@@ -213,18 +222,12 @@ def procces(in_path):
     else:
         print("Unsupported file type")
 
-    print(f"Done path: {out_path}")
+    print(f"Done. Path: {out_path}")
+
 
 def main():
     in_path = sys.argv[1]
     procces(in_path)
-    # image_path ="test_input_files/corona_image.jpg"
-    # out_path = "test_output_files/corona_image.png"
-    # draw_plates_recognition(image_path, out_path)
-
-    # video_in_path = "test_input_files/corona.mov"
-    # video_out_path = "test_output_files/corona_2.mp4"
-    # video_pipeline(video_in_path, video_out_path)
 
 
 if __name__ == "__main__":

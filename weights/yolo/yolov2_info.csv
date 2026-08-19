@@ -1,2 +1,0 @@
-val_loss0.5539, mAP@0.5 val: 0.9148,  mAP@0.75 val: 0.7370,  mAP@[.5:.95] val: 0.6200
-                mAP@0.5 test: 0.9446,  mAP@0.75 test: 0.3927,  mAP@[.5:.95] test: 0.4851
