@@ -43,8 +43,10 @@ Modern architecture YOLO8n shows better result in more strict IoU 0.5-0.95 test.
 | Test | 94.5% | 39.3% | 48.5% |
 
 ### Example outputs
-![Example 1](assets/e30.png)
-![Example 2](assets/transporter.png)
+<p align="center">
+  <img src="assets/e30.png" width="48%" />
+  <img src="assets/transporter.png" width="48%" />
+</p>
 
 **Setup:** trained on RTX 1660, Nomeroff plate-detection dataset,   
 anchors are computed using k-means, augmentation is off for OD, on for OCR.
