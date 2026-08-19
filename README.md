@@ -1,16 +1,43 @@
 # ANPR — Automatic Number-Plate Recognition using PyTorch
 
-**Detects licence plate and recognises text. Both YOLO(object-detection) and CRNN(OCR) are implemented and trained from scratch using PyTorch.**
+**Detects license plate and recognizes text. Both YOLO(object-detection) and CRNN(OCR) are implemented and trained from scratch using PyTorch.**
+
+## About
+
+The goal of this project is to understand object detection, recognition models and pipelines by implementing
+them end to end, rather than relying on existing frameworks. Every core component — the YOLOv1/YOLOv2 and CRNN
+architectures, their loss functions, anchor generation, box decoding, the mAP evaluation, and CTC decoding — is 
+written from scratch in PyTorch. I built each stage manually as a way to learn how these systems work internally. 
+The fine-tuned YOLOv8n is included as a modern baseline to benchmark the hand-built detector against.
 
 ## Demo
 ![Demo](assets/demo.gif)
 
 ## Features
- - **YOLOv2 built from scratch** - full model/train architecture, loss-function, **mAP** metrics for validation and testing implemented from original paper, then trained to detect licence plates.
- - **YOLOv1 built from scratch** - full model/train architecture and loss-function implemented from original paper, then trained to detect licence plates.
- - **CRNN OCR built from scratch** - CNN + RNN + CTC architecture implemented, then traied to recognise text.
- - **End-to-end inference** - full pipeline for proccessing images and videos.
- - **Three detection models** - fine-tuned YOLO8n is available for more precise detections (can be used optionally) 
+ - **YOLOv2 built from scratch** - full model/train architecture, loss-function, **mAP** metrics for validation and testing implemented from original paper, then trained to detect license plates.
+ - **YOLOv1 built from scratch** - full model/train architecture and loss-function implemented from original paper, then trained to detect license plates.
+ - **CRNN OCR built from scratch** - **CNN** + **RNN** + **CTC** architecture implemented, then trained to recognize text.
+ - **End-to-end inference** - full pipeline for processing images and videos.
+ - **Three detection models** - a from-scratch YOLOv1, a from-scratch YOLOv2, and an optional fine-tuned YOLOv8n baseline for higher-precision detection.
+
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Input<br/>image / video] --> B[Plate Detection<br/>YOLO]
+    B --> C[Crop plate region]
+    C --> D[OCR<br/>CRNN]
+    D --> E[Recognized text<br/>e.g. KR770]
+```
+
+### Components
+ 1. Object-detection
+    - **YOLOv1 from scratch** - Trained, evaluated and tested on dataset.
+    - **YOLOv2 from scratch** - Trained, evaluated and tested with mAP metrics on dataset.
+    - **YOLOv8n fine-tuned** - pretrained on COCO dataset. Fine-tuned for plate-detection on the same dataset for more precise outcome.
+ 2. OCR
+    - **CRNN** - CNN(feature extractor), RNN(sequence model), CTC(loss function). Implemented using PyTorch. Trained and tested to recognize text on cropped license plates. Data augmentation is used to improve training.
 
 ## Results
 
@@ -26,7 +53,7 @@
 Trained with augmentation on the Nomeroff EU OCR dataset.
 
 
-### Detection — headline comparison
+### Detection — YOLOv2 (from scratch)
 | Model | mAP@0.5 | mAP@[.5:.95] |
 |---|---|---|
 | **YOLOv2 — from scratch** (test) | **94.5%** | 48.5% |
@@ -34,7 +61,7 @@ Trained with augmentation on the Nomeroff EU OCR dataset.
 
 The hand-built YOLOv2 localizes plates almost as reliably as the fine-tuned  
 production model at the standard IoU 0.5 (94.5% vs 96.2%).  
-Modern architecture YOLO8n shows better result in more strict IoU 0.5-0.95 test.
+The modern YOLOv8n architecture yields better results on the stricter IoU 0.5:0.95 metric.
 
 ### YOLOv2 — full breakdown
 | Split | mAP@0.5 | mAP@0.75 | mAP@[.5:.95] |
@@ -48,37 +75,34 @@ Modern architecture YOLO8n shows better result in more strict IoU 0.5-0.95 test.
   <img src="assets/transporter.png" width="48%" />
 </p>
 
-**Setup:** trained on RTX 1660, Nomeroff plate-detection dataset,   
-anchors are computed using k-means, augmentation is off for OD, on for OCR.
-
-
-## Architecture
-
-```mermaid
-flowchart LR
-    A[Input<br/>image / video] --> B[Plate Detection<br/>YOLO]
-    B --> C[Crop plate region]
-    C --> D[OCR<br/>CRNN]
-    D --> E[Recognized text<br/>e.g. KK568S]
-```
-
-### Components
- 1. Object-detection
-    - **YOLOv1 from scratch** - Trained, evaluated and tested on dataset.
-    - **YOLO8n fine-tuned** - pretrained on COCO dataset. Fine-tuned for plate-detection for more precise outcome.
- 2. OCR
-    - **CRNN** - CNN(feature extractor), RNN(sequence model), CTC(loss function). Implemented using PyTorch. Trained and tested to recognise text on cropped licence plates.
+**Setup:** trained on GTX 1660. Anchors are computed using k-means. Augmentation is enabled for OCR and disabled for object-detection.
 
  **Datasets**:  
-- YOLOv1, YOLOv2 training, YOLO8n fine-tuning:  
+- YOLOv1, YOLOv2 training, YOLOv8n fine-tuning:  
   https://nomeroff.net.ua/datasets/autoriaNumberplateDataset-2026-06-04.zip
 - CRNN training:  
   https://www.kaggle.com/datasets/abdelhamidzakaria/european-license-plates-dataset  
   https://nomeroff.net.ua/datasets/autoriaNumberplateOcrEu-2023-01-30.zip
 
 
+## Limitations
+
+- The detection head keeps YOLOv2's original 20-class output from the paper, but the model is trained on a single class (license plate), 
+so most of that class capacity is unused.
+- Inputs are resized to 416×416 without preserving aspect ratio, which can distort wide or tall images before detection.
+- Test-set mAP stays high at IoU 0.5 but falls at stricter thresholds — localization is reliable, but box regression is less precise.
+- Training data is European plates; performance on other regions is untested.
+- The from-scratch YOLOv1/YOLOv2 weights exceed GitHub's file-size limit and are not included; they must be trained locally to run.
+
+
 ## Installation
-**Project uses MPS (Metal Performance Shaders) for Mac. If you use NVIDIA then change all 'device=mps' to 'device=cuda'**
+
+**Hardware Requirements:**
+To run this project efficiently, the following hardware is recommended:
+* **CPU:** No specific requirements (any modern x86_64 or ARM processor).
+* **CUDA (NVIDIA):** RTX 2060 or newer is recommended for Tensor Core support (autocast and scaler). 
+Otherwise, disable mixed precision (autocast / GradScaler) in the training loop 
+* **MPS (Apple):** Apple Silicon (M1 chip or newer).
 
 ```bash
 # 1. Clone the repo
@@ -95,9 +119,9 @@ pip install -r requirements.txt
 
 ### Model weights
 Two weights are included:  
- - **OCR:** weights/ocr/crnn_best.pt
- - **YOLO8n fine-tuned:** weights/yolo/yolo8n_fine_tuned.pt
-
+ - **OCR:** weights/crnn_best.pt
+ - **YOLOv8n fine-tuned:** weights/yolo8n_fine_tuned.pt
+The custom YOLOv1 and YOLOv2 weights are too large to host on GitHub, so to use those models you need to train them first (see below).
 
 ## Usage
 1. **Training:**
@@ -113,13 +137,46 @@ Two weights are included:
   python -m src.training.yolov1_train --device your_device --save_path your_path
 ```
 2. **Inference:**  
-Procceses image or video. Gives final output as shown in demo.  
-Custom CRNN and fine-tuned YOLO8n models are available. YOLOv1 and YOLOv2 weights are too large to add to GitHub  
-In order to use YOLOv1 and YOLOv2 models you need to train them.
+Proceses an image or video. Gives final output as shown in demo.  
+By default it uses the fine-tuned YOLOv8n detector; to use the from-scratch YOLOv2 instead, switch draw_img/video_8n to draw_img/video_v2 in pipeline.py. 
+The result is saved to path/file_out.ext.
 ```bash
-    # for object-detection by default YOLO8n fine-tuned model is used
-    # in order to change you need to change draw_img/video_8n to draw_img/video_v2
-    # saves file into path/file_out.ext 
     python pipeline.py path/file.ext
 ```
 
+## Project structure
+```text
+
+├── assets
+├── .gitignore
+├── pipeline.py  # pipeline which is called to inference input file.
+├── README.md
+├── requirements.txt
+├── src
+│   ├── parsing.py
+│   ├── data_loaders
+│   │   ├── crnn_dataload.py
+│   │   ├── yolov1_dataload.py
+│   │   └── yolov2_dataload.py
+│   ├── eval
+│   │   ├── yolov2_eval_architecture.py
+│   │   └── yolov2_eval.py
+│   ├── models
+│   │   ├── crnn_model.py
+│   │   ├── yolov1_model.py
+│   │   └── yolov2_model.py
+│   ├── train_architecture
+│   │   ├── crnn_train_architecture.py
+│   │   ├── yolov1_train_architecture.py
+│   │   └── yolov2_train_architecture.py
+│   └── training
+│       ├── crnn_train.py
+│       ├── yolo8n_fine_tune.py
+│       ├── yolov1_test.py
+│       ├── yolov1_train.py
+│       └── yolov2_train.py
+└── weights
+    ├── crnn_best.pt
+    ├── yolo8n_fine_tuned.pt
+    └── results_info.txt  # results of mAP, recall, precision, accuracy of trained models
+```
