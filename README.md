@@ -92,7 +92,7 @@ so most of that class capacity is unused.
 - Inputs are resized to 416×416 without preserving aspect ratio, which can distort wide or tall images before detection.
 - Test-set mAP stays high at IoU 0.5 but falls at stricter thresholds — localization is reliable, but box regression is less precise.
 - Training data is European plates; performance on other regions is untested.
-- The from-scratch YOLOv1/YOLOv2 weights exceed GitHub's file-size limit and are not included; they must be trained locally to run.
+- Training and inference were tested on Linux and macOS. Behavior on Windows is unknown.
 
 
 ## Installation
@@ -128,10 +128,9 @@ Due to file size limits, the trained weights(OCR and YOLOv2) are hosted in GitHu
 **Download via terminal:**
 ```bash
 # Run from the project root to download models directly into the weights/ directory
-wget [https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/yolov2.pt](https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/yolov2.pt) -O weights/yolov2.pt
-wget [https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/crnn.pt](https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/crnn.pt) -O weights/crnn.pt
+wget https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/yolov2.pt -O weights/yolov2.pt                                    
+wget https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/crnn.pt -O weights/crnn.pt
 ```
-
 ## Usage
 1. **Training:**
 ```bash
@@ -150,7 +149,7 @@ Proceses an image or video. Gives final output as shown in demo.
 For detector argument you can choose either 'yolov2' - custom YOLOv2 model or 'yolov8n' - fine-tuned YOLOv8n model. 
 The result is saved to path/file_out.ext.
 ```bash
-    python pipeline.py --detector your_detector --path file_path # for dete
+    python pipeline.py --detector your_detector --device your_device --path file_path
 ```
 
 ## Project structure
