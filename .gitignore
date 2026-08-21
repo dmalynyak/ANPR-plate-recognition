@@ -8,3 +8,5 @@ cache/
 data/
 debug/
 models_test/
+weights/yolov2.pt
+weights/crnn.pt
