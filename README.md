@@ -56,7 +56,7 @@ Trained with augmentation on the Nomeroff EU OCR dataset.
 ### Detection — YOLOv2 (from scratch)
 | Model | mAP@0.5 | mAP@[.5:.95] |
 |---|---|---|
-| **YOLOv2 — from scratch** (test) | **94.5%** | 48.5% |
+| **YOLOv2 — from scratch** (test) | **96.2%** | 49.1% |
 | YOLO8n — fine-tuned *(reference baseline)* | 96.2% | 87.5% |
 
 The hand-built YOLOv2 localizes plates almost as reliably as the fine-tuned  
@@ -66,8 +66,8 @@ The modern YOLOv8n architecture yields better results on the stricter IoU 0.5:0.
 ### YOLOv2 — full breakdown
 | Split | mAP@0.5 | mAP@0.75 | mAP@[.5:.95] |
 |---|---|---|---|
-| Validation | 91.5% | 73.7% | 62.0% |
-| Test | 94.5% | 39.3% | 48.5% |
+| Validation | 91.7% | 72.8% | 61.8% |
+| Test | 96.2% | 47.8% | 49.1% |
 
 ### Example outputs
 <p align="center">
@@ -101,7 +101,7 @@ so most of that class capacity is unused.
 To run this project efficiently, the following hardware is recommended:
 * **CPU:** No specific requirements (any modern x86_64 or ARM processor).
 * **CUDA (NVIDIA):** RTX 2060 or newer is recommended for Tensor Core support (autocast and scaler). 
-Otherwise, disable mixed precision (autocast / GradScaler) in the training loop 
+Otherwise, disable mixed precision (autocast / GradScaler) in the training and evaluation loop 
 * **MPS (Apple):** Apple Silicon (M1 chip or newer).
 
 ```bash
@@ -118,10 +118,19 @@ pip install -r requirements.txt
 ```
 
 ### Model weights
-Two weights are included:  
- - **OCR:** weights/crnn_best.pt
+Three weights are included:  
+ - **OCR:** weights/crnn.pt
+ - **YOLOv2:** weights/yolov2.pt
  - **YOLOv8n fine-tuned:** weights/yolo8n_fine_tuned.pt
-The custom YOLOv1 and YOLOv2 weights are too large to host on GitHub, so to use those models you need to train them first (see below).
+
+Due to file size limits, the trained weights(OCR and YOLOv2) are hosted in GitHub Releases. You need to download both files to run the project.
+
+**Download via terminal:**
+```bash
+# Run from the project root to download models directly into the weights/ directory
+wget [https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/yolov2.pt](https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/yolov2.pt) -O weights/yolov2.pt
+wget [https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/crnn.pt](https://github.com/dmalynyak/ANPR-plate-recognition/releases/download/weights/crnn.pt) -O weights/crnn.pt
+```
 
 ## Usage
 1. **Training:**
@@ -138,10 +147,10 @@ The custom YOLOv1 and YOLOv2 weights are too large to host on GitHub, so to use 
 ```
 2. **Inference:**  
 Proceses an image or video. Gives final output as shown in demo.  
-By default it uses the fine-tuned YOLOv8n detector; to use the from-scratch YOLOv2 instead, switch draw_img/video_8n to draw_img/video_v2 in pipeline.py. 
+For detector argument you can choose either 'yolov2' - custom YOLOv2 model or 'yolov8n' - fine-tuned YOLOv8n model. 
 The result is saved to path/file_out.ext.
 ```bash
-    python pipeline.py path/file.ext
+    python pipeline.py --detector your_detector --path file_path # for dete
 ```
 
 ## Project structure
@@ -176,7 +185,8 @@ The result is saved to path/file_out.ext.
 │       ├── yolov1_train.py
 │       └── yolov2_train.py
 └── weights
-    ├── crnn_best.pt
+    ├── crnn.pt # you should download it from GitHub Releases (see 'Model weights' section)
+    ├── yolov2.pt # you should download it from GitHub Releases (see 'Model weights' section)
     ├── yolo8n_fine_tuned.pt
     └── results_info.txt  # results of mAP, recall, precision, accuracy of trained models
 ```
