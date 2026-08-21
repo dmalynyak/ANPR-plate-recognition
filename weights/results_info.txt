@@ -1,14 +1,14 @@
 CRNN:
 dataset: https://nomeroff.net.ua/datasets/autoriaNumberplateOcrEu-2023-01-30.zip
 dataset_expansion(augmentation) = True
-whole plate accuracy: 0.975  char accuracy: 0.995
+whole plate accuracy: 97.5%  char accuracy: 99.5%
 
 
 YOLOv2:
 dataset: https://nomeroff.net.ua/datasets/autoriaNumberplateDataset-2026-06-04.zip
 dataset_expansion(augmentation) = False
-mAP@0.5 val: 0.9148,   mAP@0.75 val: 0.7370,   mAP@[.5:.95] val: 0.6200
-mAP@0.5 test: 0.9446,  mAP@0.75 test: 0.3927,  mAP@[.5:.95] test: 0.4851
+mAP@0.5 val: 0.9165,   mAP@0.75 val: 0.7276,   mAP@[.5:.95] val: 0.6180
+mAP@0.5 test: 0.9602,  mAP@0.75 test: 0.4776,  mAP@[.5:.95] test: 0.4905
 
 
 YOLO8n (fine-tuned):
