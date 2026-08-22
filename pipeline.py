@@ -1,4 +1,5 @@
 import torch, cv2, sys, os, argparse, time
+torch.backends.cudnn.benchmark = True
 from ultralytics import YOLO
 
 from src.models import crnn_model, yolov2_model
@@ -27,15 +28,24 @@ def resolve_device(name):
     raise ValueError(f"unknown device '{name}'")
 
 
+def load_models(detector, device):
+    global recognizer, yolov8n_detector
+    # global varibles, so functions see them. (They are not downloaded every time function calls them)
+    if detector == "yolov2":
+        print(f"Loading YOLOv2 and CRNN models... device:", {device})
+        recognizer = crnn_model.CRNN().to(device)  # CRNN class (has forvard method in it)
+        recognizer.load_state_dict(torch.load("weights/crnn.pt", map_location=device, weights_only=True))
+        recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models_test forward pass
+        recognizer.to(device)
+    elif detector == "yolov8n":
+        yolov8n_detector = YOLO("weights/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset
+        recognizer = crnn_model.CRNN().to(device)  # CRNN class (has forvard method in it)
+        recognizer.load_state_dict(torch.load("weights/crnn.pt", map_location=device, weights_only=True))
+        recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models_test forward pass
+        recognizer.to(device)
 
-# global varibles, so functions see them. (They are not downloaded every time function calls them)
-yolov8n_detector = YOLO("weights/yolo8n_fine_tuned.pt")  # pretrained od_yolo on COCO dataset
-recognizer = crnn_model.CRNN()  # CRNN class (has forvard method in it)
-recognizer.load_state_dict(torch.load("weights/crnn.pt", map_location="cpu", weights_only=True))
-recognizer.eval()  # sets training=False flag so that Dropout and BatchNorm2d would not affect models_test forward pass
 
-
-def read_plate_path(image_path):
+def read_plate_path(image_path, device="cpu"):
     img = cv2.imread(image_path)  # np.array from image
     results = yolov8n_detector(image_path, conf=0.3)  # runs yolo detector
     #                                       ^ confidense that result is correct (output neuron weight)
@@ -48,7 +58,7 @@ def read_plate_path(image_path):
             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)  # like imread but for image (not path)
             gray = cv2.resize(gray, (128, 32))
 
-            t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0  # torch tensor for ocr model
+            t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device) / 255.0  # torch tensor for ocr model
             with torch.no_grad():
                 text = crnn_train_architecture.decode_image(recognizer(t))[0]
 
@@ -56,7 +66,7 @@ def read_plate_path(image_path):
 
     return out
 
-def draw_box_8n_img(frame):  # the same function but with np.array not path
+def draw_box_8n_img(frame, device="cpu"):  # the same function but with np.array not path
     img = frame
     results = yolov8n_detector(img, conf=0.5)
 
@@ -69,7 +79,7 @@ def draw_box_8n_img(frame):  # the same function but with np.array not path
             gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
             gray = cv2.resize(gray, (128, 32))
 
-            t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
+            t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device) / 255.0
             with torch.no_grad():
                 text = crnn_train_architecture.decode_image(recognizer(t))[0]
 
@@ -78,10 +88,10 @@ def draw_box_8n_img(frame):  # the same function but with np.array not path
     return out
 
 
-def draw_img_8n(image_path, out_path="results/test.png"):
+def draw_img_8n(image_path, out_path="results/test.png", device="cpu"):
     img = cv2.imread(image_path)
 
-    for (x1, y1, x2, y2), text in read_plate_path(image_path):
+    for (x1, y1, x2, y2), text in read_plate_path(image_path, device=device):
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
         text_coordinates = y1 - 10 if y1 > 20 else y2 + 25
         cv2.putText(img, text, (x1, text_coordinates), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
@@ -108,7 +118,7 @@ def draw_video_8n(video_in_path, video_out_path="results/test.mp4", device="cpu"
         if not ok:
             break  # means the end of video
 
-        for (x1, y1, x2, y2), text in draw_box_8n_img(frame):
+        for (x1, y1, x2, y2), text in draw_box_8n_img(frame, device):
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # the same as in draw_plates
             cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
@@ -117,6 +127,9 @@ def draw_video_8n(video_in_path, video_out_path="results/test.mp4", device="cpu"
     cap.release()  # closes input video
     writer.release()  # closes made video
 
+# def sync(device):
+#     if device == "cuda": torch.cuda.synchronize()
+#     elif device == "mps": torch.mps.synchronize()
 
 
 def decode_plate_v2(img_bgr, model, anchors, conf_threshold=0.4, iou_threshold=0.5, device="cpu"):
@@ -125,9 +138,12 @@ def decode_plate_v2(img_bgr, model, anchors, conf_threshold=0.4, iou_threshold=0
     # img = cv2.imread(image_path)
     x = yolov2_dataload.get_in_tensor_for_dec(img_bgr, 416, device=device) # (1,3,416,416)
     with torch.no_grad():
-        prediction = model(x) # (1,13,13,5,25)
+        #start = time.perf_counter()
+        prediction = model(x)
+        #sync(device)
+        #elapsed = time.perf_counter() - start
+        # print(f"yolov2 took {elapsed:.3f} seconds")
     prediction = prediction[0] # (13,13,5,25)
-    # anchors ?
     detected_boxes = yolov2_eval_architecture.get_detected_boxes(
         prediction, anchors, conf_threshold=conf_threshold, iou_boxes_threshold=iou_threshold).cpu() # (N, 6) cell-units
 
@@ -151,9 +167,13 @@ def decode_plate_v2(img_bgr, model, anchors, conf_threshold=0.4, iou_threshold=0
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)  # like imread but for image (not path)
         gray = cv2.resize(gray, (128, 32))
 
-        t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0  # torch tensor for ocr model
+        t = torch.tensor(gray, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(device) / 255.0  # torch tensor for ocr model
         with torch.no_grad():
+            #start = time.perf_counter()
             text = crnn_train_architecture.decode_image(recognizer(t))[0]
+            #end = time.perf_counter()
+            #elapsed = end - start
+            # print(f"ocr took {elapsed:.3f} seconds")
 
         out.append(((x1, y1, x2, y2), text))
 
@@ -215,7 +235,7 @@ def draw_video_v2(video_in_path, video_out_path, conf_threshold, iou_threshold, 
         writer.write(frame)
         end = time.perf_counter()
         elapsed = end - start
-        print(f"frame processed in {elapsed:.3f}s")
+        print(f"frame process in {elapsed:.3f}s")
 
     cap.release()  # closes input video
     writer.release()  # closes made video
@@ -231,7 +251,7 @@ def process_v8n(in_path, device="cpu"):
 
     if extension in IMAGE_EXTS:
         out_path = base + "_out.png"
-        draw_img_8n(in_path, out_path)
+        draw_img_8n(in_path, out_path, device=device)
     elif extension in VIDEO_EXTS:
         out_path = base + "_out.mp4"
         draw_video_8n(in_path, out_path, device=device)
@@ -246,7 +266,7 @@ def process_v2(in_path, device="cpu"):
 
     if extension in IMAGE_EXTS:
         out_path = base + "_out.png"
-        draw_img_v2(in_path, out_path, conf_threshold=0.4, iou_threshold=0.5)
+        draw_img_v2(in_path, out_path, conf_threshold=0.4, iou_threshold=0.5, device=device)
     elif extension in VIDEO_EXTS:
         out_path = base + "_out.mp4"
         draw_video_v2(in_path, out_path, conf_threshold=0.4, iou_threshold=0.5, device=device)
@@ -267,6 +287,7 @@ def main():
 
     device = resolve_device(args.device)
     print(f"Using {args.detector}, device {device} on {args.path}")
+    load_models(args.detector, device)
 
     if args.detector == "yolov8n":
         process_v8n(args.path, device=args.device)
