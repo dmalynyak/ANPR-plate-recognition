@@ -18,6 +18,7 @@ The fine-tuned YOLOv8n is included as a modern baseline to benchmark the hand-bu
  - **YOLOv1 built from scratch** - full model/train architecture and loss-function implemented from original paper, then trained to detect license plates.
  - **CRNN OCR built from scratch** - **CNN** + **RNN** + **CTC** architecture implemented, then trained to recognize text.
  - **End-to-end inference** - full pipeline for processing images and videos.
+ - **Fast end-to-end inference** -  end-to-end detection (YOLOv2) + OCR pipeline including frame decode and annotation runs at ~**31.5 FPS** on a GTX 1660.
  - **Three detection models** - a from-scratch YOLOv1, a from-scratch YOLOv2, and an optional fine-tuned YOLOv8n baseline for higher-precision detection.
 
 
@@ -56,18 +57,27 @@ Trained with augmentation on the Nomeroff EU OCR dataset.
 ### Detection — YOLOv2 (from scratch)
 | Model | mAP@0.5 | mAP@[.5:.95] |
 |---|---|---|
-| **YOLOv2 — from scratch** (test) | **96.2%** | 49.1% |
+| **YOLOv2 — from scratch** (test) | **96.0%** | 49.1% |
 | YOLO8n — fine-tuned *(reference baseline)* | 96.2% | 87.5% |
 
 The hand-built YOLOv2 localizes plates almost as reliably as the fine-tuned  
-production model at the standard IoU 0.5 (94.5% vs 96.2%).  
+production model at the standard IoU 0.5 (96.0% vs 96.2%).  
 The modern YOLOv8n architecture yields better results on the stricter IoU 0.5:0.95 metric.
 
 ### YOLOv2 — full breakdown
 | Split | mAP@0.5 | mAP@0.75 | mAP@[.5:.95] |
 |---|---|---|---|
 | Validation | 91.7% | 72.8% | 61.8% |
-| Test | 96.2% | 47.8% | 49.1% |
+| Test | 96.0% | 47.8% | 49.1% |
+
+### Inference speed
+| Pipeline | Device | FPS |
+|---|---|---|
+| YOLOv2 + CRNN (end-to-end) | GTX 1660 | **31.5** |
+| YOLOv2 + CRNN (end-to-end) | i5-9400F | 2.2 |
+| YOLOv8n + CRNN (end-to-end) |  GTX 1660 | 62.5 |
+
+Measured on 1080p video, end-to-end including frame decode and annotation.
 
 ### Example outputs
 <p align="center">
